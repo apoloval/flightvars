@@ -11,35 +11,37 @@ When that happens, we need some kind of interface between the sim and the
 peripherals so the latter is able to see and alter the state of the simulation.  
 
 If you are familiarized with SimConnect or FSUIPC, you've got the idea. 
-FlightVars is aimed to solve a similar problem, but with a different approach.
+FlightVars is aimed to solve a similar problem with a different approach.
 
-* **Best performance**. FSUIPC exports the data in slots indexed by an 
-address. If you want your addon to be reactive, i.e. react against changes on 
-some determined datum, you have to loop over and over reading an offset and, 
-if you detect some change on its value, then react.  This technique, known as 
-polling, is a performance killer for your addon. FlightVars (and SimConnect) 
-uses a reactive model: your addon registers its interest on some determined 
-data, and it will be notified only when it changes. Even more: FlightVars uses 
-asynchronous IO to do the task, providing the best general performance and 
-scalability.
+* **Performance**. Retrieving data by [polling][r1] is the past. FlightVars 
+is powered by [MQTT][r2], a lightweight, binary protocol specifically designed 
+for telemetric systems. Its [reactive programming][r3] model joined to its 
+[asynchronous IO][r4] architecture provides the best performance you may have. 
 
-* **Read everything**. FSUIPC is only able to read generic data. Many 
-information is managed by the simulator in such a way: altitude, heading,
-flaps position, etc. But some payware aircrafts does not use generic data to
-hold the state of the cockpit: the performance parameters introduced in your
-A320 MCDU is a good example of that. Usually, the most sophisticated aircrafts
-store such specific but useful data in local variables only accessibles from 
-the gauges known as LVARs. FlightVars is focused on retrieving not only the 
-generic data as FSUIPC or SimConnect does, but also the LVARs so you can 
-develop addons that consume this kind of information as well.
+* **Interoperability**. Forget about limiting your addon to the platform and
+programming language you didn't choice. FlightVars is powered by [MQTT][r2], 
+a standard protocol with multiple implementations and large vendor support. 
+The only thing you need is one of many MQTT client libraries available in the 
+market for your favorite platform and programming language. 
 
-* **Powerful communication**. FlightVars uses MQTT as its primary 
-communication protocol, an open standard designed for telemetric systems. 
-It's fast, lightweight and interoperable. FlightVars also supports several
-transport protocols, as local sockets, TCP, UDP and serial port. That makes 
-possible to integrate any peripheral or addon with the most convenient 
-transport to do the job.
+* **Multiversed**. Don't give up to FSUIPC offsets or SimConnect variables. 
+If you are familiarized with them, you can still use them in FlightVars thanks
+to its data multiverse support. You may access several universes of data as
+FSUIPC offsets or SimConnect variables and events. You can even access gauge 
+LVARs through FlightVars!
 
-* **Open source and free**. FlightVars is open source. You can use it for 
-free.
+* **Connectiveness**. Don't limit your addon to the Windows IPC communication 
+or TCP connectivity. FlightVars supports several transport layers allowing 
+your addon to communicate with the simulator using different transports. 
+Use your Arduino board through serial port over USB, connect your Raspberry 
+Pi using UDP, your Linux daemon using TCP, or your Windows addon using IPC.
+Just choose your platform and the appropriate channel, and let FlightVars
+do the rest. 
 
+* **Open source**. FlightVars is open. Open source, open culture, open mind. 
+And, of course, it's for free. 
+
+[r1]: http://en.wikipedia.org/wiki/Polling_(computer_science)
+[r2]: http://en.wikipedia.org/wiki/MQTT
+[r3]: http://en.wikipedia.org/wiki/Reactive_programming
+[r4]: http://en.wikipedia.org/wiki/Asynchronous_I/O
