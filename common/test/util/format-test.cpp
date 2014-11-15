@@ -15,10 +15,6 @@ using namespace flightvars::util;
 
 BOOST_AUTO_TEST_SUITE(UtilFormat)
 
-BOOST_AUTO_TEST_CASE(MustFormatNoArgs) {
-    BOOST_CHECK_EQUAL("Number", format("Number"));
-}
-
 BOOST_AUTO_TEST_CASE(MustFormatOneArg) {
     BOOST_CHECK_EQUAL("Number: 7", format("Number: %d", 7));
 }

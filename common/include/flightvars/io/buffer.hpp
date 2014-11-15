@@ -90,9 +90,9 @@ public:
 
     util::option<std::uint8_t> last_opt() const { 
         if (_limit == 0) {
-            return make_none<std::uint8_t>();
+            return util::make_none<std::uint8_t>();
         }
-        return make_some(*(_data + _limit - 1)); 
+        return util::make_some(*(_data + _limit - 1));
     }
 
     boost::asio::mutable_buffer to_boost_asio(std::size_t bytes) {
@@ -218,7 +218,7 @@ private:
     std::size_t _size;
 };
 
-std::ostream& operator << (std::ostream& s, const buffer& buff) {
+inline std::ostream& operator << (std::ostream& s, const buffer& buff) {
     s << "buffer { size:" << buff.size() <<
         ", limit:" << buff.limit() <<
         ", pos:" << buff.pos() <<
@@ -229,12 +229,12 @@ std::ostream& operator << (std::ostream& s, const buffer& buff) {
 using shared_buffer = std::shared_ptr<buffer>;
 using shared_const_buffer = std::shared_ptr<const buffer>;
 
-shared_buffer make_shared_buffer(
+inline shared_buffer make_shared_buffer(
         std::size_t size = FLIGHTVARS_DEFAULT_BUFFER_SIZE) {
     return std::make_shared<buffer>(size);
 }
 
-shared_buffer make_shared_buffer(
+inline shared_buffer make_shared_buffer(
         const std::string& data) {
     auto buff = std::make_shared<buffer>(data.length());
     buff->write(data.c_str(), data.length());

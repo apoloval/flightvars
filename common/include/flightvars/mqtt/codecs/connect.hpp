@@ -21,16 +21,16 @@ struct decoder<connect_message> {
 
     using value_type = connect_message;
 
-    static value_type decode(buffer& buff) {
+    static value_type decode(io::buffer& buff) {
         auto proto_name = decoder<std::string>::decode(buff);
         if (proto_name != "MQIsdp") {
-            throw decode_error(format("cannot decode connect message: invalid protocol name %s",
+            throw decode_error(util::format("cannot decode connect message: invalid protocol name %s",
                 proto_name));
         }
 
         auto proto_ver = decoder<uint8_t>::decode(buff);
         if (proto_ver != 3) {
-            throw decode_error(format("cannot decode connect message: invalid protocol version %d",
+            throw decode_error(util::format("cannot decode connect message: invalid protocol version %d",
                 proto_ver));
         }
 
@@ -50,13 +50,13 @@ struct decoder<connect_message> {
         std::string username;
         try {
             username = has_username ? decoder<std::string>::decode(buff) : "";
-        } catch (const buffer_underflow&) {
+        } catch (const io::buffer_underflow&) {
             has_username = false;
         }
         std::string password;
         try {
             password = has_password ? decoder<std::string>::decode(buff) : "";
-        } catch (const buffer_underflow&) {
+        } catch (const io::buffer_underflow&) {
             has_password = false;
         }
 
@@ -65,14 +65,15 @@ struct decoder<connect_message> {
                 "flag password is set, but username is missing");
         }
 
-        option<connect_will> will = has_will ? 
-            make_some(connect_will(will_topic, will_message, will_qos, will_retain)) :
-            make_none<connect_will>();
-        option<connect_credentials> credentials = has_username ?
-            make_some(connect_credentials(
+        util::option<connect_will> will = has_will ?
+            util::make_some(connect_will(will_topic, will_message, will_qos, will_retain)) :
+            util::make_none<connect_will>();
+        util::option<connect_credentials> credentials = has_username ?
+           util:: make_some(connect_credentials(
                 username, 
-                has_password ? make_some(password) : make_none<connect_credentials::password>())) :
-            make_none<connect_credentials>();
+                has_password ? util::make_some(password)
+                    : util::make_none<connect_credentials::password>())) :
+            util::make_none<connect_credentials>();
 
         return connect_message(client_id, credentials, will, keep_alive, clean_session);
     }
@@ -83,7 +84,7 @@ struct encoder<connect_message> {
 
     using value_type = connect_message;
 
-    static void encode(const value_type& conn, buffer& buff) {
+    static void encode(const value_type& conn, io::buffer& buff) {
         encoder<std::string>::encode("MQIsdp", buff);
         encoder<std::uint8_t>::encode(3, buff);
 
@@ -105,7 +106,7 @@ struct encoder<connect_message> {
 
 private:
 
-    static void encode_flags(const value_type& conn, buffer& buff) {
+    static void encode_flags(const value_type& conn, io::buffer& buff) {
         std::uint8_t byte = 0;
         auto has_username = conn.get_credentials().is_defined();
         auto has_password = conn.get_credentials()

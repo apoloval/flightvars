@@ -11,6 +11,7 @@
 #define FLIGHTVARS_IO_TCP_CONNECTION_H
 
 #include <functional>
+#include <string>
 
 #include <boost/asio.hpp>
 #include <boost/format.hpp>
@@ -107,16 +108,17 @@ private:
 
 using shared_tcp_connection = std::shared_ptr<tcp_connection>;
 
-std::ostream& operator << (std::ostream& s, const tcp_connection& conn) {
+inline std::ostream& operator << (std::ostream& s, const tcp_connection& conn) {
     s << conn.str();
     return s;
 }
 
 FLIGHTVARS_DECL_EXCEPTION(resolve_error);
 
-future<tcp::resolver::iterator> resolve(executor& exec, 
-                                        const std::string& host, 
-                                        std::uint32_t port) {
+inline future<tcp::resolver::iterator>
+resolve(executor& exec,
+        const std::string& host,
+        std::uint32_t port) {
     auto resolver = std::make_shared<tcp::resolver>(exec);
     auto result = make_shared_promise<tcp::resolver::iterator>();
     resolver->async_resolve(
@@ -139,9 +141,10 @@ future<tcp::resolver::iterator> resolve(executor& exec,
 
 FLIGHTVARS_DECL_EXCEPTION(connect_error);
 
-future<tcp_connection> tcp_connect(executor& exec, 
-                                   const std::string& host, 
-                                   std::uint32_t port) {
+inline future<tcp_connection>
+tcp_connect(executor& exec,
+            const std::string& host,
+            std::uint32_t port) {
     return resolve(exec, host, port)
         .fmap<tcp_connection>([&exec, host, port](const tcp::resolver::iterator& ep_it) {
             auto socket = std::make_shared<tcp::socket>(exec);

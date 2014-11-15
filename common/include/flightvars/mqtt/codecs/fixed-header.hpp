@@ -20,7 +20,7 @@ struct decoder<fixed_header> {
 
     using value_type = fixed_header;
 
-    static value_type decode(buffer& buff) {
+    static value_type decode(io::buffer& buff) {
         fixed_header header;
         auto b1 = buff.safe_read_value<std::uint8_t>();
         
@@ -36,7 +36,7 @@ struct decoder<fixed_header> {
 
 private:
 
-    static std::size_t decode_length(buffer& buff) {
+    static std::size_t decode_length(io::buffer& buff) {
         std::size_t value = 0;
         for (std::size_t i = 0; i < 4; i++) {
             auto digit = buff.safe_read_value<std::uint8_t>();
@@ -57,7 +57,7 @@ struct encoder<fixed_header> {
 
     using value_type = fixed_header;
 
-    static void encode(const value_type& fh, buffer& buff) {
+    static void encode(const value_type& fh, io::buffer& buff) {
         std::uint8_t b1 = 0;
         b1 |= static_cast<std::uint8_t>(fh.msg_type) << 4;
         b1 |= fh.dup_flag ? 0x08 : 0x00;
@@ -70,7 +70,7 @@ struct encoder<fixed_header> {
 
 private:
 
-    static void encode_length(const value_type& fh, buffer& buff) {
+    static void encode_length(const value_type& fh, io::buffer& buff) {
         std::size_t value = fh.len;
         for (int i = 0; i < 4; i++) {
             auto digit = value & 0x7f;

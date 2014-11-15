@@ -32,22 +32,22 @@ set(flightvars_INCLUDE_DIR
 )
 
 set(flightvars_unittests_SOURCES
-   test/concurrent/future-test.hpp
-   test/concurrent/promise-test.hpp
-   test/io/buffer-test.hpp
-   test/io/tcp-server-it.hpp
+   test/concurrent/future-test.cpp
+   test/concurrent/promise-test.cpp
+   test/io/buffer-test.cpp
+   test/io/tcp-server-it.cpp
    test/main.cpp
-   test/mqtt/decoder/connect-test.hpp
-   test/mqtt/decoder/fixed-header-test.hpp
-   test/mqtt/decoder/types-test.hpp
-   test/mqtt/encoder/connect-test.hpp
-   test/mqtt/encoder/fixed-header-test.hpp
-   test/mqtt/encoder/types-test.hpp
-   test/mqtt/session-test.hpp
-   test/tcp-server-it.hpp
-   test/util/attempt-test.hpp
-   test/util/format-test.hpp
-   test/util/option-test.hpp
+   test/mqtt/decoder/connect-test.cpp
+   test/mqtt/decoder/fixed-header-test.cpp
+   test/mqtt/decoder/types-test.cpp
+   test/mqtt/encoder/connect-test.cpp
+   test/mqtt/encoder/fixed-header-test.cpp
+   test/mqtt/encoder/types-test.cpp
+   test/mqtt/session-test.cpp
+   test/tcp-server-it.cpp
+   test/util/attempt-test.cpp
+   test/util/format-test.cpp
+   test/util/option-test.cpp
 )
 
 include_directories(

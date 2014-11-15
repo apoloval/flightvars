@@ -12,26 +12,27 @@
 #include <flightvars/io/buffer.hpp>
 #include <flightvars/mqtt/session.hpp>
 
+using namespace flightvars;
 using namespace flightvars::mqtt;
 
 BOOST_AUTO_TEST_SUITE(MqttSession)
 
 struct mock_connection {
     using shared_ptr = std::shared_ptr<mock_connection>;
-    buffer read_buffer;
-    buffer write_buffer;
+    io::buffer read_buffer;
+    io::buffer write_buffer;
 
-    future<shared_buffer> read(const shared_buffer& buff, std::size_t bytes) {
+    concurrent::future<io::shared_buffer> read(const io::shared_buffer& buff, std::size_t bytes) {
         BOOST_CHECK_EQUAL(bytes, buff->write(read_buffer, bytes));
         read_buffer.inc_pos(bytes);
-        return make_future_success(buff);
+        return concurrent::make_future_success(buff);
     }
 
     template <class Message>
     void prepare_read(const fixed_header& hd, const Message& msg) {
         read_buffer.reset();
-        encoder<fixed_header>::encode(hd, read_buffer);
-        encoder<Message>::encode(msg, read_buffer);
+        codecs::encoder<fixed_header>::encode(hd, read_buffer);
+        codecs::encoder<Message>::encode(msg, read_buffer);
         read_buffer.flip();
     }
 };
@@ -62,7 +63,7 @@ BOOST_AUTO_TEST_CASE(Must)
 
     auto session = make_session(conn, [](const shared_message& msg) {
         // TODO: return an actual response
-        return make_future_success(msg);
+        return concurrent::make_future_success(msg);
     });
 }
 

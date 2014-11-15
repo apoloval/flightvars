@@ -14,7 +14,7 @@
 
 namespace flightvars { namespace util {
 
-std::string format(const boost::format& fmt) {
+inline std::string format(const boost::format& fmt) {
     return fmt.str();
 }
 

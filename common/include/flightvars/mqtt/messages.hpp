@@ -39,7 +39,7 @@ enum class message_type {
     RESERVED_15 = 15
 };
 
-std::string message_type_str(message_type mt) {
+inline std::string message_type_str(message_type mt) {
     switch (mt) {
         case message_type::RESERVED_0:    return "RESERVED_0";
         case message_type::CONNECT:       return "CONNECT";
@@ -61,7 +61,7 @@ std::string message_type_str(message_type mt) {
     }
 }
 
-std::ostream& operator << (std::ostream& s, const message_type& mt) {
+inline std::ostream& operator << (std::ostream& s, const message_type& mt) {
     s << message_type_str(mt);
     return s;
 }
@@ -82,7 +82,7 @@ struct fixed_header {
     }    
 };
 
-std::ostream& operator << (std::ostream& s, const fixed_header& header) {
+inline std::ostream& operator << (std::ostream& s, const fixed_header& header) {
     s << header.str();
     return s;
 }
@@ -92,10 +92,10 @@ struct message {
     std::unique_ptr<connect_message> connect;
 
     message(const fixed_header& hd, const connect_message& msg)
-      : header(hd), connect(std::make_unique<connect_message>(msg)) {}
+      : header(hd), connect(new connect_message { msg }) {}
 };
 
-std::ostream& operator << (std::ostream& s, const message& msg) {
+inline std::ostream& operator << (std::ostream& s, const message& msg) {
     // TODO: implement this
     s << "message";
     return s;

@@ -7,8 +7,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#define BOOST_TEST_MODULE FlightVars
-#include <boost/test/unit_test.hpp>
+#define BOOST_TEST_MODULE "Unit Tests for FlightVars"
+#include <boost/test/included/unit_test.hpp>
 
 #include <flightvars/util/logging.hpp>
 
@@ -20,17 +20,3 @@ struct global_fixture {
 };
 
 BOOST_GLOBAL_FIXTURE(global_fixture);
-
-#include "concurrent/future-test.hpp"
-#include "concurrent/promise-test.hpp"
-#include "io/buffer-test.hpp"
-#include "io/tcp-server-it.hpp"
-#include "mqtt/decoder/connect-test.hpp"
-#include "mqtt/decoder/fixed-header-test.hpp"
-#include "mqtt/decoder/types-test.hpp"
-#include "mqtt/encoder/connect-test.hpp"
-#include "mqtt/encoder/fixed-header-test.hpp"
-#include "mqtt/encoder/types-test.hpp"
-#include "mqtt/session-test.hpp"
-#include "util/attempt-test.hpp"
-#include "util/option-test.hpp"

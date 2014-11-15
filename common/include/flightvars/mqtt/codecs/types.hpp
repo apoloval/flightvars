@@ -12,6 +12,7 @@
 
 #include <cinttypes>
 
+#include <flightvars/io/buffer.hpp>
 #include <flightvars/util/endian.hpp>
 #include <flightvars/util/exception.hpp>
 
@@ -26,7 +27,7 @@ template <>
 struct decoder<std::uint8_t> {
     using value_type = std::uint8_t;
 
-    static value_type decode(buffer& buff) {
+    static value_type decode(io::buffer& buff) {
         return buff.safe_read_value<value_type>();
     }
 };
@@ -35,8 +36,8 @@ template <>
 struct decoder<std::uint16_t> {
     using value_type = std::uint16_t;
 
-    static value_type decode(buffer& buff) {
-        return from_big_endian(buff.safe_read_value<value_type>());
+    static value_type decode(io::buffer& buff) {
+        return util::from_big_endian(buff.safe_read_value<value_type>());
     }
 };
 
@@ -46,8 +47,8 @@ struct decoder<std::string> {
 
     using value_type = std::string;
 
-    static value_type decode(buffer& buff) {
-        auto len = from_big_endian(buff.safe_read_value<std::uint16_t>());
+    static value_type decode(io::buffer& buff) {
+        auto len = util::from_big_endian(buff.safe_read_value<std::uint16_t>());
         auto content = new char[len + 1];
         buff.safe_read(content, len * sizeof(char));
         content[len] = 0;
@@ -66,7 +67,7 @@ template <>
 struct encoder<std::uint8_t> {
     using value_type = std::uint8_t;
 
-    static void encode(const value_type& num, buffer& buff) {
+    static void encode(const value_type& num, io::buffer& buff) {
         buff.safe_write_value(num);
     }
 };
@@ -75,8 +76,8 @@ template <>
 struct encoder<std::uint16_t> {
     using value_type = std::uint16_t;
 
-    static void encode(const value_type& num, buffer& buff) {
-        buff.safe_write_value(to_big_endian(num));
+    static void encode(const value_type& num, io::buffer& buff) {
+        buff.safe_write_value(util::to_big_endian(num));
     }
 };
 
@@ -84,9 +85,9 @@ template <>
 struct encoder<std::string> {
     using value_type = std::string;
 
-    static void encode(const value_type& str, buffer& buff) {
+    static void encode(const value_type& str, io::buffer& buff) {
         std::uint16_t len = str.size();
-        buff.safe_write_value(to_big_endian(len));
+        buff.safe_write_value(util::to_big_endian(len));
         buff.safe_write(str.c_str(), len);
     }
 };

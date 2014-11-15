@@ -35,7 +35,7 @@ private:
 
     util::logger _log;
     typename Connection::shared_ptr _conn;
-    std::function<future<shared_message>(const shared_message&)> _msg_handler;
+    std::function<concurrent::future<shared_message>(const shared_message&)> _msg_handler;
 
     template <class MessageHandler>
     mqtt_session(const typename Connection::shared_ptr& conn, 
@@ -43,11 +43,11 @@ private:
 
     void start() {
         BOOST_LOG_SEV(_log, log_level::DEBUG) << "Initializing a new MQTT session on " << *_conn;
-        auto buff = make_shared_buffer();
+        auto buff = io::make_shared_buffer();
         process_request(buff);
     }
 
-    void process_request(const shared_buffer& buff) {
+    void process_request(const io::shared_buffer& buff) {
         BOOST_LOG_SEV(_log, log_level::TRACE) << 
             "Processing new request for session on " << *_conn;
         process_message(buff).add_listener(
@@ -55,7 +55,7 @@ private:
                 this->shared_from_this(), buff, std::placeholders::_1));
     }
 
-    void request_processed(const shared_buffer& buff, const attempt<void>& result) {
+    void request_processed(const io::shared_buffer& buff, const util::attempt<void>& result) {
         try { 
             result.get();
             BOOST_LOG_SEV(_log, log_level::DEBUG) << 
@@ -66,7 +66,7 @@ private:
         }
     }
 
-    future<void> process_message(const shared_buffer& buff) {
+    concurrent::future<void> process_message(const io::shared_buffer& buff) {
         return receive_message(buff)
             .template fmap<shared_message>(
                 std::bind(&mqtt_session::deliver_message, 
@@ -79,7 +79,7 @@ private:
                     this->shared_from_this(), buff, std::placeholders::_1));
     }
 
-    future<shared_message> receive_message(const shared_buffer& buff) {
+    concurrent::future<shared_message> receive_message(const io::shared_buffer& buff) {
         BOOST_LOG_SEV(_log, log_level::TRACE) << "Receiving a new message from connection";
         return read_header(buff)
             .template fmap<shared_message>(
@@ -87,14 +87,14 @@ private:
                     this->shared_from_this(), buff, std::placeholders::_1));
     }
 
-    future<fixed_header> read_header(const shared_buffer& buff) {
+    concurrent::future<fixed_header> read_header(const io::shared_buffer& buff) {
         return _conn->read(buff, fixed_header::BASE_LEN)
             .template fmap<fixed_header>(
                 std::bind(&mqtt_session::fixed_header_read, 
                     this->shared_from_this(), std::placeholders::_1, 1));
     }
 
-    future<fixed_header> fixed_header_read(const shared_buffer& buff, std::size_t size_bytes) {
+    concurrent::future<fixed_header> fixed_header_read(const io::shared_buffer& buff, std::size_t size_bytes) {
         buff->flip();
         bool bytes_follow = (buff->last() & 0x80) && size_bytes < 4;
         if (bytes_follow) {
@@ -109,11 +109,11 @@ private:
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*buff);
             BOOST_LOG_SEV(_log, log_level::TRACE) << "Fixed header read: " << header;
-            return make_future_success(header);
+            return concurrent::make_future_success(header);
         }
     }
 
-    future<shared_message> read_complete_message(const shared_buffer& buff, 
+    concurrent::future<shared_message> read_complete_message(const io::shared_buffer& buff,
                                                  const fixed_header& header) {
         buff->reset();
         return _conn->read(buff, header.len)
@@ -122,7 +122,7 @@ private:
                     this->shared_from_this(), header, std::placeholders::_1));
     }
 
-    shared_message process_content(const fixed_header& header, const shared_buffer& buff) {
+    shared_message process_content(const fixed_header& header, const io::shared_buffer& buff) {
         buff->flip();
         auto expected_len = header.len;
         auto actual_len = buff->remaining();
@@ -143,15 +143,15 @@ private:
         }
     }
 
-    future<shared_message> deliver_message(const shared_buffer& buff, const shared_message& msg) {
+    concurrent::future<shared_message> deliver_message(const io::shared_buffer& buff, const shared_message& msg) {
         return _msg_handler(msg);
     }
 
-    future<shared_message> send_message(const shared_buffer& buff, const shared_message& msg) {
+    concurrent::future<shared_message> send_message(const io::shared_buffer& buff, const shared_message& msg) {
         throw std::runtime_error("send_message is not implemented");
     }
 
-    void message_processed(const shared_buffer& buff, const shared_message& msg) {
+    void message_processed(const io::shared_buffer& buff, const shared_message& msg) {
         BOOST_LOG_SEV(_log, log_level::DEBUG) << "Message " << *msg << " successfully processed";
     }
 

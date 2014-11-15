@@ -50,7 +50,7 @@ inline std::basic_ostream< CharT, TraitsT >& operator<< (
 using logger = logging::sources::severity_channel_logger<log_level, std::string>;
 
 // TODO: have setups for different purposes (testing, production, etc)
-void setup_file_logging(const std::string& file_pattern) {
+inline void setup_file_logging(const std::string& file_pattern) {
     logging::register_simple_formatter_factory<log_level, char>("Severity");
     logging::add_common_attributes();    
 
@@ -60,7 +60,7 @@ void setup_file_logging(const std::string& file_pattern) {
     );
 }
 
-void setup_console_logging() {
+inline void setup_console_logging() {
     logging::register_simple_formatter_factory<log_level, char>("Severity");
     logging::add_common_attributes();    
 

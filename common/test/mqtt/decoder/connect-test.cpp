@@ -12,31 +12,31 @@
 #include <flightvars/io/buffer.hpp>
 #include <flightvars/mqtt/codecs/connect.hpp>
 
-using namespace flightvars::mqtt;
+using namespace flightvars;
 using namespace flightvars::mqtt::codecs;
 
 BOOST_AUTO_TEST_SUITE(MqttDecoderConnect)
 
 BOOST_AUTO_TEST_CASE(MustFailToDecodeOnInvalidProtocolName) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x04, 'A', 'B', 'C', 'D', // protocol name
         0x03,                           // protocol version
         0x00,                           // connect flags
         0x00, 0x0A,                     // keep alive timer
         0x00, 0x03, 'a', 'p', 'v',      // client identifier
     });
-    BOOST_CHECK_THROW(decoder<connect_message>::decode(buff), decode_error);
+    BOOST_CHECK_THROW(decoder<mqtt::connect_message>::decode(buff), decode_error);
 }
 
 BOOST_AUTO_TEST_CASE(MustDecode) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0x00,                                       // connect flags
         0x00, 0x0A,                                 // keep alive timer
         0x00, 0x03, 'a', 'p', 'v',                  // client identifier
     });
-    auto msg = decoder<connect_message>::decode(buff);
+    auto msg = decoder<mqtt::connect_message>::decode(buff);
 
     BOOST_CHECK_EQUAL("apv", msg.get_client_id());
     BOOST_CHECK_EQUAL(10, msg.keep_alive());
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(MustDecode) {
 }
 
 BOOST_AUTO_TEST_CASE(MustDecodeWithWill) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0x04,                                       // connect flags
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeWithWill) {
         0x00, 0x03, 'X', 'Y', 'Z',                  // will topic
         0x00, 0x03, '1', '2', '3',                  // will message
     });
-    auto msg = decoder<connect_message>::decode(buff);
+    auto msg = decoder<mqtt::connect_message>::decode(buff);
 
     BOOST_CHECK_EQUAL("apv", msg.get_client_id());
     BOOST_CHECK_EQUAL(10, msg.keep_alive());
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeWithWill) {
 }
 
 BOOST_AUTO_TEST_CASE(MustDecodeWithUsername) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0x80,                                       // connect flags
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeWithUsername) {
         0x00, 0x03, 'a', 'p', 'v',                  // client identifier
         0x00, 0x03, 'X', 'Y', 'Z',                  // username
     });
-    auto msg = decoder<connect_message>::decode(buff);
+    auto msg = decoder<mqtt::connect_message>::decode(buff);
 
     BOOST_CHECK_EQUAL("apv", msg.get_client_id());
     BOOST_CHECK_EQUAL(10, msg.keep_alive());
@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeWithUsername) {
 }
 
 BOOST_AUTO_TEST_CASE(MustDecodeWithUsernameAndPassword) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0xC0,                                       // connect flags
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeWithUsernameAndPassword) {
         0x00, 0x03, 'X', 'Y', 'Z',                  // username
         0x00, 0x03, '1', '2', '3',                  // password
     });
-    auto msg = decoder<connect_message>::decode(buff);
+    auto msg = decoder<mqtt::connect_message>::decode(buff);
 
     BOOST_CHECK_EQUAL("apv", msg.get_client_id());
     BOOST_CHECK_EQUAL(10, msg.keep_alive());
@@ -113,14 +113,14 @@ BOOST_AUTO_TEST_CASE(MustDecodeWithUsernameAndPassword) {
 }
 
 BOOST_AUTO_TEST_CASE(MustDecodeIgnoringUsernameFlagIfFieldIsMissing) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0x80,                                       // connect flags
         0x00, 0x0A,                                 // keep alive timer
         0x00, 0x03, 'a', 'p', 'v',                  // client identifier
     });
-    auto msg = decoder<connect_message>::decode(buff);
+    auto msg = decoder<mqtt::connect_message>::decode(buff);
 
     BOOST_CHECK_EQUAL("apv", msg.get_client_id());
     BOOST_CHECK_EQUAL(10, msg.keep_alive());
@@ -132,7 +132,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeIgnoringUsernameFlagIfFieldIsMissing) {
 }
 
 BOOST_AUTO_TEST_CASE(MustDecodeIgnoringPasswordFlagIfFieldIsMissing) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0xC0,                                       // connect flags
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeIgnoringPasswordFlagIfFieldIsMissing) {
         0x00, 0x03, 'a', 'p', 'v',                  // client identifier
         0x00, 0x03, 'X', 'Y', 'Z',                  // username
     });
-    auto msg = decoder<connect_message>::decode(buff);
+    auto msg = decoder<mqtt::connect_message>::decode(buff);
 
     BOOST_CHECK_EQUAL("apv", msg.get_client_id());
     BOOST_CHECK_EQUAL(10, msg.keep_alive());
@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(MustDecodeIgnoringPasswordFlagIfFieldIsMissing) {
 }
 
 BOOST_AUTO_TEST_CASE(MustFailToDecodeOnPasswordFlagWithMissingUsername) {
-    auto buff = buffer({ 
+    auto buff = io::buffer({
         0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p',   // protocol name
         0x03,                                       // protocol version
         0x40,                                       // connect flags
@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(MustFailToDecodeOnPasswordFlagWithMissingUsername) {
         0x00, 0x03, 'a', 'p', 'v',                  // client identifier
         0x00, 0x03, '1', '2', '3',                  // password
     });
-    BOOST_CHECK_THROW(decoder<connect_message>::decode(buff), decode_error);
+    BOOST_CHECK_THROW(decoder<mqtt::connect_message>::decode(buff), decode_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

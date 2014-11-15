@@ -15,6 +15,7 @@
 #include <boost/format.hpp>
 
 #include <flightvars/mqtt/qos.hpp>
+#include <flightvars/util/option.hpp>
 #include <flightvars/util/exception.hpp>
 
 namespace flightvars { namespace mqtt {
@@ -25,11 +26,11 @@ public:
     using username = std::string;
     using password = std::string;
 
-    connect_credentials(const username& usr, const option<password>& pwd)
+    connect_credentials(const username& usr, const util::option<password>& pwd)
         : _username(usr), _password(pwd) {}
 
     connect_credentials(const username& usr, const password& pwd)
-        : _username(usr), _password(make_some(pwd)) {}
+        : _username(usr), _password(util::make_some(pwd)) {}
 
     connect_credentials(const username& usr) : _username(usr) {}
 
@@ -38,12 +39,12 @@ public:
 
     const username& get_username() const { return _username; }
 
-    const option<password> get_password() const { return _password; }
+    const util::option<password> get_password() const { return _password; }
 
 private:
 
     username _username;
-    option<password> _password;
+    util::option<password> _password;
 };
 
 class connect_will {
@@ -80,8 +81,8 @@ public:
     using client_id = std::string;
 
     connect_message(const client_id& id, 
-                    const option<connect_credentials>& credentials, 
-                    const option<connect_will>& will, 
+                    const util::option<connect_credentials>& credentials,
+                    const util::option<connect_will>& will,
                     unsigned int keep_alive, 
                     bool clean_session) :
         _id(id), _will(will), _credentials(credentials), 
@@ -92,21 +93,22 @@ public:
                     const connect_will& will, 
                     unsigned int keep_alive, 
                     bool clean_session) :
-        _id(id), _will(make_some(will)), _credentials(make_some(credentials)), 
+        _id(id), _will(util::make_some(will)), _credentials(util::make_some(credentials)),
         _keep_alive(keep_alive), _clean_session(clean_session) {}
 
     connect_message(const client_id& id, 
                     const connect_credentials& credentials, 
                     unsigned int keep_alive, 
                     bool clean_session) :
-        _id(id), _credentials(make_some(credentials)), 
+        _id(id), _credentials(util::make_some(credentials)),
         _keep_alive(keep_alive), _clean_session(clean_session) {}
 
     connect_message(const client_id& id, 
                     const connect_will& will, 
                     unsigned int keep_alive, 
                     bool clean_session) :
-        _id(id), _will(make_some(will)), _keep_alive(keep_alive), _clean_session(clean_session) {}
+        _id(id), _will(util::make_some(will)), _keep_alive(keep_alive),
+        _clean_session(clean_session) {}
 
     connect_message(const client_id& id, 
                     unsigned int keep_alive, 
@@ -119,9 +121,9 @@ public:
 
     const client_id& get_client_id() const { return _id; }
 
-    const option<connect_credentials>& get_credentials() const { return _credentials; }
+    const util::option<connect_credentials>& get_credentials() const { return _credentials; }
 
-    const option<connect_will>& get_will() const { return _will; }
+    const util::option<connect_will>& get_will() const { return _will; }
 
     unsigned int keep_alive() const { return _keep_alive; }
 
@@ -130,8 +132,8 @@ public:
 private:
 
     client_id _id;
-    option<connect_will> _will;
-    option<connect_credentials> _credentials;
+    util::option<connect_will> _will;
+    util::option<connect_credentials> _credentials;
     unsigned int _keep_alive;
     bool _clean_session;
 };

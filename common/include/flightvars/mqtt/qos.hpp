@@ -25,7 +25,7 @@ enum class qos_level {
     QOS_RESERVED_3
 };
 
-std::string qos_level_str(qos_level qos) {
+inline std::string qos_level_str(qos_level qos) {
     switch (qos) {
         case qos_level::QOS_0:          return "QoS-0";
         case qos_level::QOS_1:          return "QoS-1";
@@ -35,7 +35,7 @@ std::string qos_level_str(qos_level qos) {
     }
 }
 
-std::ostream& operator << (std::ostream& s, const qos_level& qos) {
+inline std::ostream& operator << (std::ostream& s, const qos_level& qos) {
     s << qos_level_str(qos);
     return s;
 }

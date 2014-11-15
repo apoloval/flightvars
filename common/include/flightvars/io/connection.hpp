@@ -11,6 +11,7 @@
 #define FLIGHTVARS_IO_CONNECTION_H
 
 #include <flightvars/concurrent/future.hpp>
+#include <flightvars/io/buffer.hpp>
 
 namespace flightvars { namespace io {
 
@@ -27,12 +28,14 @@ struct is_connection {
 };
 
 template <class Connection>
-future<shared_buffer> read_remaining(Connection& conn, const shared_buffer& buff) {
+concurrent::future<shared_buffer>
+read_remaining(Connection& conn, const shared_buffer& buff) {
     return conn.read(buff, buff->remaining());
 }
 
 template <class Connection>
-future<shared_const_buffer> write_remaining(Connection& conn, const shared_const_buffer& buff) {
+concurrent::future<shared_const_buffer>
+write_remaining(Connection& conn, const shared_const_buffer& buff) {
     return conn.write(buff, buff->remaining());
 } 
 
