@@ -19,6 +19,7 @@ set(flightvars_HEADERS
    include/flightvars/mqtt/qos.hpp
    include/flightvars/mqtt/session.hpp
    include/flightvars/util/attempt.hpp
+   include/flightvars/util/either.hpp
    include/flightvars/util/endian.hpp
    include/flightvars/util/exception.hpp
    include/flightvars/util/format.hpp
@@ -46,6 +47,7 @@ set(flightvars_unittests_SOURCES
    test/mqtt/session-test.cpp
    test/tcp-server-it.cpp
    test/util/attempt-test.cpp
+   test/util/either-test.cpp
    test/util/format-test.cpp
    test/util/option-test.cpp
 )
