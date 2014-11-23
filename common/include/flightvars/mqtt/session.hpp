@@ -42,13 +42,13 @@ private:
                  const MessageHandler& msg_handler) : _conn(conn), _msg_handler(msg_handler) {}
 
     void start() {
-        BOOST_LOG_SEV(_log, log_level::DEBUG) << "Initializing a new MQTT session on " << *_conn;
+        BOOST_LOG_SEV(_log, util::log_level::DEBUG) << "Initializing a new MQTT session on " << *_conn;
         auto buff = io::make_shared_buffer();
         process_request(buff);
     }
 
     void process_request(const io::shared_buffer& buff) {
-        BOOST_LOG_SEV(_log, log_level::TRACE) << 
+        BOOST_LOG_SEV(_log, util::log_level::TRACE) << 
             "Processing new request for session on " << *_conn;
         process_message(buff).add_listener(
             std::bind(&mqtt_session::request_processed, 
@@ -58,10 +58,10 @@ private:
     void request_processed(const io::shared_buffer& buff, const util::attempt<void>& result) {
         try { 
             result.get();
-            BOOST_LOG_SEV(_log, log_level::DEBUG) << 
+            BOOST_LOG_SEV(_log, util::log_level::DEBUG) << 
                 "Request successfully processed on " << *_conn;
         } catch (const std::exception& e) {
-            BOOST_LOG_SEV(_log, log_level::ERROR) << 
+            BOOST_LOG_SEV(_log, util::log_level::ERROR) << 
                 "Error while processing request on " << *_conn << ": " << e.what();
         }
     }
@@ -80,7 +80,7 @@ private:
     }
 
     concurrent::future<shared_message> receive_message(const io::shared_buffer& buff) {
-        BOOST_LOG_SEV(_log, log_level::TRACE) << "Receiving a new message from connection";
+        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from connection";
         return read_header(buff)
             .template fmap<shared_message>(
                 std::bind(&mqtt_session::read_complete_message, 
@@ -98,7 +98,7 @@ private:
         buff->flip();
         bool bytes_follow = (buff->last() & 0x80) && size_bytes < 4;
         if (bytes_follow) {
-            BOOST_LOG_SEV(_log, log_level::TRACE) << 
+            BOOST_LOG_SEV(_log, util::log_level::TRACE) << 
                 "Fixed header is incomplete, some byte(s) follow; reading one more byte... ";
             buff->reset();
             buff->set_pos(size_bytes + 1);
@@ -108,7 +108,7 @@ private:
                         this->shared_from_this(), std::placeholders::_1, size_bytes + 1));
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*buff);
-            BOOST_LOG_SEV(_log, log_level::TRACE) << "Fixed header read: " << header;
+            BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Fixed header read: " << header;
             return concurrent::make_future_success(header);
         }
     }
@@ -127,7 +127,7 @@ private:
         auto expected_len = header.len;
         auto actual_len = buff->remaining();
         if (actual_len != expected_len) {
-            throw session_error(format(
+            throw session_error(util::format(
                 "cannot process MQTT message content: "
                 "expected %d bytes of remaining length, but %d found", expected_len, actual_len));
         }
@@ -138,7 +138,7 @@ private:
                 break;
             }
             default:
-                throw std::runtime_error(format("cannot decode message of unknown type %s", 
+                throw std::runtime_error(util::format("cannot decode message of unknown type %s", 
                     message_type_str(header.msg_type)));
         }
     }
@@ -152,7 +152,7 @@ private:
     }
 
     void message_processed(const io::shared_buffer& buff, const shared_message& msg) {
-        BOOST_LOG_SEV(_log, log_level::DEBUG) << "Message " << *msg << " successfully processed";
+        BOOST_LOG_SEV(_log, util::log_level::DEBUG) << "Message " << *msg << " successfully processed";
     }
 
 };
