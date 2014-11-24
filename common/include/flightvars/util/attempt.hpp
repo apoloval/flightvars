@@ -14,9 +14,12 @@
 #include <memory>
 
 #include <flightvars/util/exception.hpp>
+#include <flightvars/util/either.hpp>
 #include <flightvars/util/option.hpp>
 
 namespace flightvars { namespace util {
+
+FV_DECL_EXCEPTION(attempt_error);
 
 /** 
  * An attempt to produce a value of class T. 
@@ -29,81 +32,119 @@ template <class T>
 class attempt {
 public:
 
-    static_assert(std::is_void<T>::value || std::is_copy_constructible<T>::value, 
-        "attempt cannot be instantiated with non-copy constructible types");
+    /** Create a successful attempt. */
+    attempt(const T& value) : _result(value) {}
 
-    /** Create a successful attempt for T != void. */
-    template <class U = T>    
-    attempt(typename std::enable_if<!std::is_void<U>::value, const U&>::type value) : 
-        _value(value) {}
-
-    /** Create a successful attempt for T == void. */
-    template <class U = T>    
-    attempt(typename std::enable_if<std::is_void<U>::value>::type* value = 0) : _value(true) {}
+    /** Create a successful attempt. */
+    attempt(T&& value) : _result(std::move(value)) {}
 
     /** Create a failure attempt. */
-    attempt(const std::exception_ptr& error) : _error(error) {}
+    attempt(const std::exception_ptr& error) : _result(error) {}
 
     /** Create a failure attempt. */
     template <class E>
-    attempt(const E& error) : _error(std::make_exception_ptr(error)) {}
+    attempt(const E& error) : _result(std::make_exception_ptr(error)) {}
 
-    /** Copy constructor. */
-    attempt(const attempt& other) : 
-        _value(other._value), _error(other._error) {}
+    attempt(const attempt& other) = default;
+    attempt(attempt&& other) = default;
 
-    /** Move constructor. */
-    attempt(attempt&& other) : _value(std::move(other._value)), _error(std::move(other._error)) {}
+    attempt& operator = (const attempt& other) = default;
+    attempt& operator = (attempt&& other) = default;
 
-    /** Copy operator. */
-    attempt& operator = (const attempt& other) {
-        _value = other._value;
-        _error = other._error;
-        return *this;
-    }
+    /** True if this attempt has a state, false otherwise. */
+    bool valid() const { return _result.valid(); }
 
     /** Return true if the attempt was successful, false otherwise. */
-    bool is_success() const { return _value.is_defined(); }
+    bool is_success() const { return _result.has_left(); }
 
     /** Return true of the attempt has failed, false otherwise. */
-    bool is_failure() const { return !is_success(); }
+    bool is_failure() const { return _result.has_right(); }
 
     /** Return the computed value if success, or throw the error otherwise. */
-    template <class U = T>
-    typename std::enable_if<!std::is_void<U>::value, const U&>::type
-    get() const {
-        if (is_failure()) {
-            std::rethrow_exception(_error);
-        }
-        return _value.get();
+    const T& get() const {
+        throw_if_not_success();
+        return _result.left();
     }
 
-    /** Return the computed value if success, or throw the error otherwise. */
-    template <class U = T>
-    typename std::enable_if<std::is_void<U>::value>::type
-    get() const { if (!is_success()) { std::rethrow_exception(_error); } }
-
     /** Return the computed value as an option. */
-    const option<T>& get_opt() const {
-        return _value;
+    option<T> get_opt() const {
+        return is_success() ? make_some(_result.left()) : make_none<T>();
     }
 
 private:
 
-    option<T> _value;
-    std::exception_ptr _error;
+    either<T, std::exception_ptr> _result;
+
+    void throw_if_not_success() const {
+        if (_result.has_right()) {
+            std::rethrow_exception(_result.right());
+        } else if (!_result.has_left()) {
+            throw attempt_error("this attempt is not defined");
+        }
+    }
 };
 
-template <class T, class U = attempt<T>>
-typename std::enable_if<!std::is_void<T>::value, U>::type 
+template <>
+class attempt<void> {
+public:
+
+    /** Create a successful attempt. */
+    attempt(bool is_success = true) {
+        if (is_success) { _result.reset(nullptr); }
+    }
+
+    /** Create a failure attempt. */
+    attempt(const std::exception_ptr& error) : _result(error) {}
+
+    /** Create a failure attempt. */
+    template <class E>
+    attempt(const E& error) : _result(std::make_exception_ptr(error)) {}
+
+    attempt(const attempt& other) = default;
+    attempt(attempt&& other) = default;
+
+    attempt& operator = (const attempt& other) = default;
+    attempt& operator = (attempt&& other) = default;
+
+    /** Return true if the attempt was successful, false otherwise. */
+    bool is_success() const { return _result.has_left(); }
+
+    /** Return true of the attempt has failed, false otherwise. */
+    bool is_failure() const { return _result.has_right(); }
+
+    /** Do nothing if success, or throw the error otherwise. */
+    void get() const {
+        throw_if_not_success();
+    }
+
+    /** Return the computed value as an option. */
+    option<void> get_opt() const {
+        return is_success() ? make_some() : make_none<void>();
+    }
+
+private:
+
+    either<std::nullptr_t, std::exception_ptr> _result;
+
+    void throw_if_not_success() const {
+        if (_result.has_right()) {
+            std::rethrow_exception(_result.right());
+        } else if (!_result.has_left()) {
+            throw attempt_error("this attempt is not defined");
+        }
+    }
+};
+
+template <class T>
+typename std::enable_if<!std::is_void<T>::value, attempt<T>>::type
 make_success(const T& value) {
     return attempt<T>(value); 
 }
 
-template <class T, class U = attempt<T>>
-typename std::enable_if<std::is_void<T>::value, U>::type 
+template <class T>
+typename std::enable_if<std::is_void<T>::value, attempt<void>>::type
 make_success() {
-    return attempt<T>(); 
+    return attempt<void>(true); 
 }
 
 template <class T>

@@ -32,6 +32,8 @@ public:
 
     option(const T& data) : _data(new T(data)) {}
 
+    option(T&& data) : _data(new T(std::move(data))) {}
+
     option(const option& other) : _data(other.is_defined() ? new T(other.get()) : nullptr) {}
 
     option(option&& other) : _data(std::move(other._data)) {}
@@ -130,6 +132,10 @@ private:
 template <class T>
 option<T> make_some(const T& value) {
     return option<T>(value);
+}
+
+inline option<void> make_some() {
+    return option<void>();
 }
 
 template <class T>
