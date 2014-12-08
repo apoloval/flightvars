@@ -32,6 +32,9 @@ template <class T>
 class attempt {
 public:
 
+    /** Create a stateless attempt instance. */
+    attempt() = default;
+
     /** Create a successful attempt. */
     attempt(const T& value) : _result(value) {}
 
@@ -101,7 +104,7 @@ class attempt<void> {
 public:
 
     /** Create a successful attempt. */
-    attempt(bool is_success = true) {
+    attempt(bool is_success = false) {
         if (is_success) { _result.reset(nullptr); }
     }
 
@@ -117,6 +120,9 @@ public:
 
     attempt& operator = (const attempt& other) = default;
     attempt& operator = (attempt&& other) = default;
+
+    /** True if this attempt has a state, false otherwise. */
+    bool valid() const { return _result.valid(); }
 
     /** Return true if the attempt was successful, false otherwise. */
     bool is_success() const { return _result.has_left(); }
