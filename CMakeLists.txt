@@ -25,5 +25,10 @@ REQUIRED)
 
 message(STATUS "Boost libraries are at ${Boost_LIBRARY_DIR}")
 
+# Set platform-dependent compiler flags
+if(WIN32)
+    set(CMAKE_CXX_FLAGS "-D_WIN32_WINNT=0x0501 /EHsc")
+endif(WIN32)
+
 # Add the subdirs
 add_subdirectory(common)
