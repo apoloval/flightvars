@@ -20,10 +20,7 @@ FV_DECL_EXCEPTION(option_undefined);
 
 template <class T>
 class option {
-public:
-
-    static_assert(std::is_copy_constructible<T>::value,
-        "option cannot be instantiated with non-copy constructible types");
+public:    
 
     template <class T1> 
     friend class option;
@@ -55,6 +52,8 @@ public:
         _data.reset(other.is_defined() ? new T(other.get()) : nullptr);
         return *this;
     }
+
+    bool valid() const { return is_defined(); }
 
     bool is_defined() const { return bool(_data); }
 
@@ -121,6 +120,8 @@ public:
         _is_defined = other._is_defined;
         return *this;
     }
+
+    bool valid() const { return is_defined(); }
 
     bool is_defined() const { return _is_defined; }
 
