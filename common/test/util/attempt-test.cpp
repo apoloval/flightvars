@@ -25,9 +25,26 @@ BOOST_AUTO_TEST_CASE(MustWrapAValueWhenInitFromSuccess)
     BOOST_CHECK_EQUAL(10, a.get());
 }
 
+BOOST_AUTO_TEST_CASE(MustWrapAValueWhenInitFromVoidSuccess)
+{
+    auto a = make_success<void>();
+    BOOST_CHECK(a.is_success());
+    BOOST_CHECK(!a.is_failure());
+    BOOST_CHECK_NO_THROW(a.get());
+}
+
+
 BOOST_AUTO_TEST_CASE(MustWrapAnErrorWhenInitFromFailure)
 {
     auto a = make_failure<int>(custom_exception("something went wrong"));
+    BOOST_CHECK(!a.is_success());
+    BOOST_CHECK(a.is_failure());
+    BOOST_CHECK_THROW(a.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustWrapAnErrorWhenInitFromVoidFailure)
+{
+    auto a = make_failure<void>(custom_exception("something went wrong"));
     BOOST_CHECK(!a.is_success());
     BOOST_CHECK(a.is_failure());
     BOOST_CHECK_THROW(a.get(), custom_exception);
@@ -55,5 +72,72 @@ BOOST_AUTO_TEST_CASE(MustExtract) {
     BOOST_CHECK(!a.valid());
 }
 
+BOOST_AUTO_TEST_CASE(MustMapSuccess) {
+    auto a = make_success(std::string { "Hello!" });
+    auto b = a.map([](const std::string& s) { return s.size(); });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_EQUAL(6, b.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustMapFailure) {
+    auto a = make_failure<std::string>(custom_exception("something went wrong"));
+    auto b = a.map([](const std::string& s) { return s.size(); });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_THROW(b.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustMapVoidSuccess) {
+    auto a = make_success<void>();
+    auto b = a.map([]() { return 6; });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_EQUAL(6, b.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustMapVoidFailure) {
+    auto a = make_failure<void>(custom_exception("something went wrong"));
+    auto b = a.map([]() { return 6; });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_THROW(b.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustFMapSuccess) {
+    auto a = make_success(std::string { "Hello!" });
+    auto b = a.fmap<int>([](const std::string& s) {
+        return make_success<int>(s.size());
+    });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_EQUAL(6, b.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustFMapFailure) {
+    auto a = make_failure<std::string>(custom_exception("something went wrong"));
+    auto b = a.fmap<int>([](const std::string& s) {
+        return make_success<int>(s.size());
+    });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_THROW(b.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustFMapVoidSuccess) {
+    auto a = make_success<void>();
+    auto b = a.fmap<int>([]() { return make_success<int>(6); });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_EQUAL(6, b.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustFMapVoidFailure) {
+    auto a = make_failure<void>(custom_exception("something went wrong"));
+    auto b = a.fmap<int>([]() { return make_success<int>(6); });
+
+    BOOST_CHECK(a.valid());
+    BOOST_CHECK_THROW(b.get(), custom_exception);
+}
 
 BOOST_AUTO_TEST_SUITE_END()

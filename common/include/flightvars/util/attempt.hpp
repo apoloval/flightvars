@@ -44,10 +44,6 @@ public:
     /** Create a failure attempt. */
     attempt(const std::exception_ptr& error) : _result(error) {}
 
-    /** Create a failure attempt. */
-    template <class E>
-    attempt(const E& error) : _result(std::make_exception_ptr(error)) {}
-
     attempt(const attempt& other) = default;
     attempt(attempt&& other) = default;
 
@@ -86,6 +82,20 @@ public:
         return is_success() ? make_some(_result.left()) : make_none<T>();
     }
 
+    /** Map this attempt into another type. */
+    template <class Func>
+    auto map(Func f) -> attempt<decltype(f(get()))> const {
+        try { return make_success(f(get())); }
+        catch (...) { return make_failure<decltype(f(get()))>(std::current_exception()); }
+    }
+
+    /** Flat-map this attempt into another type. */
+    template <class U>
+    attempt<U> fmap(const std::function<attempt<U>(const T&)>& f) const {
+        try { return f(get()); }
+        catch (...) { return make_failure<U>(std::current_exception()); }
+    }
+
 private:
 
     either<T, std::exception_ptr> _result;
@@ -110,10 +120,6 @@ public:
 
     /** Create a failure attempt. */
     attempt(const std::exception_ptr& error) : _result(error) {}
-
-    /** Create a failure attempt. */
-    template <class E>
-    attempt(const E& error) : _result(std::make_exception_ptr(error)) {}
 
     attempt(const attempt& other) = default;
     attempt(attempt&& other) = default;
@@ -143,6 +149,24 @@ public:
     /** Return the computed value as an option. */
     option<void> get_opt() const {
         return is_success() ? make_some() : make_none<void>();
+    }
+
+    /** Map this attempt into another type. */
+    template <class Func>
+    auto map(Func f) -> attempt<decltype(f())> const {
+        try {
+            throw_if_not_success();
+            return make_success(f());
+        } catch (...) { return make_failure<decltype(f())>(std::current_exception()); }
+    }
+
+    /** Flat-map this attempt into another type. */
+    template <class U>
+    attempt<U> fmap(const std::function<attempt<U>()>& f) const {
+        try {
+            throw_if_not_success();
+            return f();
+        } catch (...) { return make_failure<U>(std::current_exception()); }
     }
 
 private:
@@ -183,7 +207,7 @@ attempt<T> make_failure(const std::exception_ptr& error) {
 
 template <class T, class E>
 attempt<T> make_failure(const E& error) {
-    return attempt<T>(error);
+    return attempt<T>(std::make_exception_ptr(error));
 }
 
 }}
