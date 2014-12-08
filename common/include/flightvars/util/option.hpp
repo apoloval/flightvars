@@ -58,7 +58,7 @@ public:
 
     bool is_defined() const { return bool(_data); }
 
-    const T& get() const { 
+    T& get() const {
         if (is_defined()) {
             return *_data;
         } else {
@@ -72,6 +72,16 @@ public:
 
     void set(const T& data) {
         _data.reset(new T(data));
+    }
+
+    T extract() {
+        if (is_defined()) {
+            auto r = std::move(*_data);
+            _data.reset(nullptr);
+            return std::move(r);
+        } else {
+            throw option_undefined("cannot extract on not defined option");
+        }
     }
 
     template <class T1, class Func>
@@ -124,6 +134,13 @@ public:
         _is_defined = is_defined;
     }
 
+    void extract() {
+        if (!is_defined()) {
+            throw option_undefined("cannot extract on not defined option");
+        }
+        _is_defined = false;
+    }
+
 private:
 
     bool _is_defined;
@@ -132,6 +149,11 @@ private:
 template <class T>
 option<T> make_some(const T& value) {
     return option<T>(value);
+}
+
+template <class T>
+option<T> move_some(T&& value) {
+    return option<T>(std::forward<T>(value));
 }
 
 inline option<void> make_some() {

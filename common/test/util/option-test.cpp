@@ -48,6 +48,22 @@ BOOST_AUTO_TEST_CASE(MustThrowOnGetWhenUndefined)
     BOOST_CHECK_THROW(opt.get(), option_undefined);
 }
 
+BOOST_AUTO_TEST_CASE(MustGetByMovement)
+{
+    option<std::string> opt("Hello!");
+    auto s = std::move(opt.get());
+    BOOST_CHECK_EQUAL("Hello!", s);
+    BOOST_CHECK_EQUAL("", opt.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustExtract)
+{
+    option<std::string> opt("Hello!");
+    auto s = std::move(opt.extract());
+    BOOST_CHECK_EQUAL("Hello!", s);
+    BOOST_CHECK(!opt.is_defined());
+}
+
 BOOST_AUTO_TEST_CASE(MustDefineWithSet)
 {
     option<int> opt;

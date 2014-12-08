@@ -30,6 +30,9 @@ template <class T, class U>
 class either {
 public:
 
+    static_assert(!std::is_void<T>::value && !std::is_void<U>::value,
+            "cannot instantiate an either object with a void type");
+
     /** Create a new either object with nor left neither right defined. */
     either() = default;
 
@@ -99,16 +102,48 @@ public:
     /** True if populated with right value, false otherwise. */
     bool has_right() const { return !!_right; }
 
-    /** Obtain the left item, or throw `either_undefined` it is populated with right value. */
+    /** Obtain the left item, or throw `either_undefined` if not populated with left value. */
     const T& left() const {
         if (has_left()) { return *_left; }
         else { throw either_error("cannot get undefined left part of either"); }
     }
 
-    /** Obtain the right item, or throw `either_undefined` it is populated with left value. */
+    /** Obtain the left item, or throw `either_undefined` if not populated with left value. */
+    T& left() {
+        if (has_left()) { return *_left; }
+        else { throw either_error("cannot get undefined left part of either"); }
+    }
+
+    /** Extract the left item, or throw `either_undefined` if not populated with left value. */
+    T extract_left() {
+        if (has_left()) {
+            T r = std::move(*_left);
+            reset();
+            return r;
+        }
+        else { throw either_error("cannot get undefined left part of either"); }
+    }
+
+    /** Obtain the right item, or throw `either_undefined` if not populated with right value. */
     const U& right() const {
         if (has_right()) { return *_right; }
         else { throw either_error("cannot get undefined right part of either"); }
+    }
+
+    /** Obtain the right item, or throw `either_undefined` if not populated with right value. */
+    U& right() {
+        if (has_right()) { return *_right; }
+        else { throw either_error("cannot get undefined right part of either"); }
+    }
+
+    /** Extract the left item, or throw `either_undefined` if not populated with right value. */
+    U extract_right() {
+        if (has_right()) {
+            U r = std::move(*_right);
+            reset();
+            return r;
+        }
+        else { throw either_error("cannot get undefined left part of either"); }
     }
 
 private:

@@ -47,4 +47,13 @@ BOOST_AUTO_TEST_CASE(MustBeCopyable) {
     BOOST_CHECK_THROW(a6.get(), custom_exception);
 }
 
+BOOST_AUTO_TEST_CASE(MustExtract) {
+    auto a = make_success(std::string { "Hello!" });
+    auto str = a.extract();
+
+    BOOST_CHECK_EQUAL("Hello!", str);
+    BOOST_CHECK(!a.valid());
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()

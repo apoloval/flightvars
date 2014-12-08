@@ -126,4 +126,18 @@ BOOST_AUTO_TEST_CASE(MustResetRightByMove) {
     BOOST_CHECK(!val.has_left());
 }
 
+BOOST_AUTO_TEST_CASE(MustExtractLeft) {
+    auto val = either<int, std::string>(7);
+    auto i = val.extract_left();
+    BOOST_CHECK_EQUAL(7, i);
+    BOOST_CHECK(!val.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustExtractRight) {
+    auto val = either<int, std::string>("Hello!");
+    auto str = val.extract_right();
+    BOOST_CHECK_EQUAL("Hello!", str);
+    BOOST_CHECK(!val.valid());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

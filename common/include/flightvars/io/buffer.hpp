@@ -92,7 +92,7 @@ public:
         if (_limit == 0) {
             return util::make_none<std::uint8_t>();
         }
-        return util::make_some(*(_data + _limit - 1));
+        return util::make_some<std::uint8_t>(*(_data + _limit - 1));
     }
 
     boost::asio::mutable_buffer to_boost_asio(std::size_t bytes) {

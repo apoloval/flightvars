@@ -66,6 +66,18 @@ public:
         return _result.left();
     }
 
+    /** Return the computed value if success, or throw the error otherwise. */
+    T& get() {
+        throw_if_not_success();
+        return _result.left();
+    }
+
+    /** Extract the computed value if success, or throw the error otherwise. */
+    T extract() {
+        throw_if_not_success();
+        return _result.extract_left();
+    }
+
     /** Return the computed value as an option. */
     option<T> get_opt() const {
         return is_success() ? make_some(_result.left()) : make_none<T>();
@@ -117,6 +129,11 @@ public:
         throw_if_not_success();
     }
 
+    void extract() {
+        throw_if_not_success();
+        _result.reset();
+    }
+
     /** Return the computed value as an option. */
     option<void> get_opt() const {
         return is_success() ? make_some() : make_none<void>();
@@ -139,6 +156,12 @@ template <class T>
 typename std::enable_if<!std::is_void<T>::value, attempt<T>>::type
 make_success(const T& value) {
     return attempt<T>(value); 
+}
+
+template <class T>
+typename std::enable_if<!std::is_void<T>::value, attempt<T>>::type
+move_success(T&& value) {
+    return attempt<T>(std::forward<T>(value));
 }
 
 template <class T>
