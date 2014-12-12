@@ -18,6 +18,7 @@
 
 #include <flightvars/io/buffer.hpp>
 #include <flightvars/io/types.hpp>
+#include <flightvars/concurrent/executor.hpp>
 #include <flightvars/concurrent/promise.hpp>
 #include <flightvars/concurrent/future.hpp>
 #include <flightvars/util/logging.hpp>
@@ -116,15 +117,15 @@ inline std::ostream& operator << (std::ostream& s, const tcp_connection& conn) {
 FLIGHTVARS_DECL_EXCEPTION(resolve_error);
 
 inline future<tcp::resolver::iterator>
-resolve(executor& exec,
-        const std::string& host,
-        std::uint32_t port) {
-    auto resolver = std::make_shared<tcp::resolver>(exec);
+resolve(const std::string& host,
+        std::uint32_t port,
+        const concurrent::asio_service_executor& exec) {
+    auto resolver = std::make_shared<tcp::resolver>(exec.io_service());
     auto result = make_shared_promise<tcp::resolver::iterator>();
     resolver->async_resolve(
         { host, std::to_string(port) },
         [resolver, result, host, port](const boost::system::error_code& error,
-                           tcp::resolver::iterator it) {
+                                       tcp::resolver::iterator it) {
             logger log;
             if (!error) {
                 result->set_success(it);
@@ -142,18 +143,18 @@ resolve(executor& exec,
 FLIGHTVARS_DECL_EXCEPTION(connect_error);
 
 inline future<tcp_connection>
-tcp_connect(executor& exec,
-            const std::string& host,
-            std::uint32_t port) {
-    return resolve(exec, host, port)
-        .fmap<tcp_connection>([&exec, host, port](const tcp::resolver::iterator& ep_it) {
-            auto socket = std::make_shared<tcp::socket>(exec);
+tcp_connect(const std::string& host,
+            std::uint32_t port,
+            const concurrent::asio_service_executor& exec) {
+    return resolve(host, port, exec)
+        .fmap<tcp_connection>([host, port, exec](const tcp::resolver::iterator& ep_it) {
+            auto socket = std::make_shared<tcp::socket>(exec.io_service());
             auto result = make_shared_promise<tcp_connection>();
             boost::asio::async_connect(
                 *socket, 
                 ep_it, 
-                [socket, result, host, port](const boost::system::error_code& error, 
-                                 tcp::resolver::iterator) {
+                [socket, result, host, port, exec](const boost::system::error_code& error,
+                                                   tcp::resolver::iterator) {
                     logger log;
                     if (!error) {
                         auto conn = tcp_connection(socket);

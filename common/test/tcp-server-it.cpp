@@ -9,6 +9,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <flightvars/concurrent/executor.hpp>
 #include <flightvars/io/buffer.hpp>
 #include <flightvars/io/tcp-server.hpp>
 
@@ -19,7 +20,7 @@ BOOST_AUTO_TEST_SUITE(IoTcpServer)
 
 BOOST_AUTO_TEST_CASE(Must)
 {
-    executor exec;
+    concurrent::asio_service_executor exec;
     /*
     tcp_server server(5005, [](tcp_connection& conn) {
         auto input_buffer = io::make_shared_buffer(256);

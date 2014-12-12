@@ -15,6 +15,7 @@
 #include <boost/asio.hpp>
 #include <boost/format.hpp>
 
+#include <flightvars/concurrent/executor.hpp>
 #include <flightvars/io/tcp-connection.hpp>
 #include <flightvars/io/types.hpp>
 #include <flightvars/util/logging.hpp>
@@ -26,7 +27,8 @@ public:
 
     FV_DECL_EXCEPTION(accept_error);
 
-    tcp_server(executor& exec, int port) : _acceptor(exec, endpoint(tcp::v4(), port)) {}
+    tcp_server(int port, concurrent::asio_service_executor& exec) :
+        _acceptor(exec.io_service(), endpoint(tcp::v4(), port)) {}
 
     future<tcp_connection> accept() {
         auto socket = std::make_shared<tcp::socket>(

@@ -34,9 +34,11 @@ public:
     asio_service_executor(const asio_service_executor&) = default;
     asio_service_executor(asio_service_executor&&) = default;
 
-    boost::asio::io_service& io_service() { return *_service; }
+    boost::asio::io_service& io_service() const { return *_service; }
 
     void run() { _service->run(); }
+
+    void stop() { _service->stop(); }
 
     template <class Task>
     void execute(Task task) { _service->post(task); }

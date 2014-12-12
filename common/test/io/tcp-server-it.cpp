@@ -9,9 +9,11 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <flightvars/concurrent/executor.hpp>
 #include <flightvars/io/connection.hpp>
 #include <flightvars/io/tcp-server.hpp>
 
+using namespace flightvars;
 using namespace flightvars::io;
 
 BOOST_AUTO_TEST_SUITE(IoTcpServer)
@@ -73,8 +75,8 @@ struct client_session : std::enable_shared_from_this<client_session> {
 
 BOOST_AUTO_TEST_CASE(MustCommunicateClientAndServer)
 {
-    executor exec;
-    tcp_server server(exec, 5005);
+    concurrent::asio_service_executor exec;
+    tcp_server server(5005, exec);
     server.accept()
         .map<server_session::shared_ptr>([](const tcp_connection& conn) {
             return std::make_shared<server_session>(conn);
@@ -82,14 +84,14 @@ BOOST_AUTO_TEST_CASE(MustCommunicateClientAndServer)
         .fmap<void>([](const server_session::shared_ptr& session) {
             return session->process();
         });
-    auto result = tcp_connect(exec, "localhost", 5005)
+    auto result = tcp_connect("localhost", 5005, exec)
         .map<client_session::shared_ptr>([](const tcp_connection& conn) {
             return std::make_shared<client_session>(conn);
         })
         .fmap<void>([](const client_session::shared_ptr& session) {
             return session->process();
         })
-        .map<void>([&exec]() {
+        .map<void>([exec]() mutable {
             exec.stop();
         });
     exec.run();
@@ -98,15 +100,15 @@ BOOST_AUTO_TEST_CASE(MustCommunicateClientAndServer)
 
 BOOST_AUTO_TEST_CASE(MustFailToConnectWhenServerIsNotListening)
 {
-    executor exec;
-    auto result = tcp_connect(exec, "localhost", 5005)
+    concurrent::asio_service_executor exec;
+    auto result = tcp_connect("localhost", 5005, exec)
         .map<client_session::shared_ptr>([](const tcp_connection& conn) {
             return std::make_shared<client_session>(conn);
         })
         .fmap<void>([](const client_session::shared_ptr& session) {
             return session->process();
         })
-        .map<void>([&exec]() {
+        .map<void>([exec]() mutable {
             exec.stop();
         });
     exec.run();
@@ -115,15 +117,15 @@ BOOST_AUTO_TEST_CASE(MustFailToConnectWhenServerIsNotListening)
 
 BOOST_AUTO_TEST_CASE(MustFailToConnectWhenServerHostIsUnknown)
 {
-    executor exec;
-    auto result = tcp_connect(exec, "abcdefghijklmnopqrstuvwxyz", 5005)
+    concurrent::asio_service_executor exec;
+    auto result = tcp_connect("abcdefghijklmnopqrstuvwxyz", 5005, exec)
         .map<client_session::shared_ptr>([](const tcp_connection& conn) {
             return std::make_shared<client_session>(conn);
         })
         .fmap<void>([](const client_session::shared_ptr& session) {
             return session->process();
         })
-        .map<void>([&exec]() {
+        .map<void>([exec]() mutable {
             exec.stop();
         });
     exec.run();

@@ -16,7 +16,6 @@
 
 namespace flightvars { namespace io {
 
-using executor = boost::asio::io_service;
 using tcp = boost::asio::ip::tcp;
 using endpoint = tcp::endpoint;
 
