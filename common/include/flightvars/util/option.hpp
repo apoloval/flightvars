@@ -57,12 +57,14 @@ public:
 
     bool is_defined() const { return bool(_data); }
 
-    T& get() const {
-        if (is_defined()) {
-            return *_data;
-        } else {
-            throw option_undefined("cannot get on not defined option");
-        }
+    const T& get() const {
+        if (is_defined()) { return *_data; }
+        else { throw option_undefined("cannot get on not defined option"); }
+    }
+
+    T& get() {
+        if (is_defined()) { return *_data; }
+        else { throw option_undefined("cannot get on not defined option"); }
     }
 
     const T& get_or_else(const T& other) const {
