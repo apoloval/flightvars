@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <list>
 
+#include <flightvars/concurrent/executor.hpp>
 #include <flightvars/concurrent/promise.hpp>
 #include <flightvars/util/attempt.hpp> 
 #include <flightvars/util/option.hpp>
@@ -52,10 +53,15 @@ public:
     typename std::enable_if<std::is_void<U>::value>::type
     get() const { return _core->get(); }
 
-    void add_listener(const listener& l) { _core->add_listener(l); }
+    template <class Executor = concurrent::same_thread_executor>
+    void add_listener(const listener& l, const Executor& exec = Executor()) {
+        _core->add_listener(std::bind(
+            concurrent::run<Executor, listener, attempt<T>>,
+            exec, l, std::placeholders::_1));
+    }
 
-    template <class U, class Func>
-    future<U> map(const Func& map) {
+    template <class U, class Func, class Executor = concurrent::same_thread_executor>
+    future<U> map(Func map, const Executor& exec = Executor()) {
         auto p = std::make_shared<promise<U>>();
         auto f = make_future(*p);
         add_listener([p, map](const attempt<T>& result) {
@@ -64,12 +70,12 @@ public:
             } catch(...) {
                 p->set_failure(std::current_exception());
             }
-        });
+        }, exec);
         return f; 
     }
 
-    template <class U, class Func>
-    future<U> fmap(const Func& map) {
+    template <class U, class Func, class Executor = concurrent::same_thread_executor>
+    future<U> fmap(Func map, const Executor& exec = Executor()) {
         auto p = std::make_shared<promise<U>>();
         auto f = make_future(*p);
         add_listener([p, map](const attempt<T>& result) {
@@ -78,7 +84,7 @@ public:
             } catch(...) {
                 p->set_failure(std::current_exception());
             }
-        });
+        }, exec);
         return f; 
     }
 
@@ -160,8 +166,8 @@ private:
         void on_complete(const util::attempt<T>& result) {
             _result = make_some(result);
             for (auto l : _listeners) {
-                try { l(_result.get()); }
-                catch (...) {} // ignore listener errors
+                try { l(result); }
+                catch (...) {} // ignore exceptions thrown by listeners
             }
 
         }
