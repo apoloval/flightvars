@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(FlightVars-Common)
 
 set(flightvars_HEADERS
+   include/flightvars/concurrent/executor.hpp
    include/flightvars/concurrent/future.hpp
    include/flightvars/concurrent/promise.hpp
    include/flightvars/io/buffer.hpp
@@ -33,6 +34,7 @@ set(flightvars_INCLUDE_DIR
 )
 
 set(flightvars_unittests_SOURCES
+   test/concurrent/executor-test.cpp
    test/concurrent/future-test.cpp
    test/concurrent/promise-test.cpp
    test/io/buffer-test.cpp
