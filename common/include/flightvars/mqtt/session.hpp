@@ -21,38 +21,79 @@ namespace flightvars { namespace mqtt {
 
 FLIGHTVARS_DECL_EXCEPTION(session_error);
 
-template <class Connection>
-class mqtt_session : public std::enable_shared_from_this<mqtt_session<Connection>> {
+/**
+ * A MQTT session.
+ *
+ * The MQTT session wraps an IO Connection object and implements the logic to extract MQTT
+ * requests, deliver them to a handler and use the resulting response message to write it back
+ * to the connection.
+ *
+ * On its constructor, the Connection object, the handler and one executor are provided.
+ * The handler is a function that receives a `mqtt::shared_message` and returns
+ * `concurrent::future<mqtt::shared_message>`. That handler is expected to process the incoming
+ * message and produce a future response message. The executor passed as argument is used to
+ * execute the read and write actions and the handler.
+ *
+ * This is a create-and-forget class. Its private constructor prevents it to be instantiated as a
+ * stack variable. Use the convenience function `make_mqtt_session()` to obtain a shared instance.
+ * Once `mqtt_session::start()` is invoked, it will continue running while the given connection
+ * is alive, regardless the shared pointer is disposed or not.
+ */
+template <class Connection, class Executor>
+class mqtt_session : public std::enable_shared_from_this<mqtt_session<Connection, Executor>> {
 public:
 
     using shared_ptr = std::shared_ptr<mqtt_session>;
 
-    template <class C, class MessageHandler>
-    friend typename mqtt_session<C>::shared_ptr make_mqtt_session(
-        const typename C::shared_ptr&, const MessageHandler&);
+    template <class C, class MessageHandler, class E>
+    friend typename mqtt_session<C, E>::shared_ptr make_mqtt_session(
+        const typename C::shared_ptr&,
+        const MessageHandler&,
+        const E&);
+
+    void start() {
+        BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
+            "Initializing a new MQTT session on " << *_conn;
+        auto buff = io::make_shared_buffer();
+        concurrent::run(_exec, &mqtt_session::process_request, self(), buff);
+    }
 
 private:
 
     util::logger _log;
     typename Connection::shared_ptr _conn;
     std::function<concurrent::future<shared_message>(const shared_message&)> _msg_handler;
+    Executor _exec;
 
     template <class MessageHandler>
     mqtt_session(const typename Connection::shared_ptr& conn, 
-                 const MessageHandler& msg_handler) : _conn(conn), _msg_handler(msg_handler) {}
+                 const MessageHandler& msg_handler,
+                 const Executor& exec) : _conn(conn), _msg_handler(msg_handler), _exec(exec) {}
 
-    void start() {
-        BOOST_LOG_SEV(_log, util::log_level::DEBUG) << "Initializing a new MQTT session on " << *_conn;
-        auto buff = io::make_shared_buffer();
-        process_request(buff);
-    }
+    std::shared_ptr<mqtt_session> self() { return this->shared_from_this(); }
 
     void process_request(const io::shared_buffer& buff) {
-        BOOST_LOG_SEV(_log, util::log_level::TRACE) << 
+        using namespace std::placeholders;
+
+        BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
             "Processing new request for session on " << *_conn;
-        process_message(buff).add_listener(
-            std::bind(&mqtt_session::request_processed, 
-                this->shared_from_this(), buff, std::placeholders::_1));
+        read_request(buff)
+            .fmap<shared_message>(_msg_handler, _exec)
+            .fmap<void>(std::bind(&mqtt_session::write_response, self(), buff, _1), _exec)
+            .add_listener(std::bind(&mqtt_session::request_processed, self(), buff, _1), _exec);
+    }
+
+    concurrent::future<shared_message> read_request(const io::shared_buffer& buff) {
+        using namespace std::placeholders;
+
+        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from connection";
+        return read_header(buff).fmap<shared_message>(
+            std::bind(&mqtt_session::read_message_from_header, self(), buff, _1));
+    }
+
+    concurrent::future<void> write_response(const io::shared_buffer& buff,
+                                            const shared_message& response) {
+        return concurrent::make_future_success<void>();
     }
 
     void request_processed(const io::shared_buffer& buff, const util::attempt<void>& result) {
@@ -60,41 +101,26 @@ private:
             result.get();
             BOOST_LOG_SEV(_log, util::log_level::DEBUG) << 
                 "Request successfully processed on " << *_conn;
+            // TODO: enable this line to loop
+            // concurrent::run(_exec, &mqtt_session::process_request, self(), buff);
         } catch (const std::exception& e) {
             BOOST_LOG_SEV(_log, util::log_level::ERROR) << 
                 "Error while processing request on " << *_conn << ": " << e.what();
         }
-    }
+    }        
 
-    concurrent::future<void> process_message(const io::shared_buffer& buff) {
-        return receive_message(buff)
-            .template fmap<shared_message>(
-                std::bind(&mqtt_session::deliver_message, 
-                    this->shared_from_this(), buff, std::placeholders::_1))
-            .template fmap<shared_message>(
-                std::bind(&mqtt_session::send_message, 
-                    this->shared_from_this(), buff, std::placeholders::_1))
-            .template map<void>(
-                std::bind(&mqtt_session::message_processed, 
-                    this->shared_from_this(), buff, std::placeholders::_1));
-    }
+    concurrent::future<fixed_header>
+    read_header(const io::shared_buffer& buff) {
+        using namespace std::placeholders;
 
-    concurrent::future<shared_message> receive_message(const io::shared_buffer& buff) {
-        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from connection";
-        return read_header(buff)
-            .template fmap<shared_message>(
-                std::bind(&mqtt_session::read_complete_message, 
-                    this->shared_from_this(), buff, std::placeholders::_1));
-    }
-
-    concurrent::future<fixed_header> read_header(const io::shared_buffer& buff) {
         return _conn->read(buff, fixed_header::BASE_LEN)
-            .template fmap<fixed_header>(
-                std::bind(&mqtt_session::fixed_header_read, 
-                    this->shared_from_this(), std::placeholders::_1, 1));
+            .fmap<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, 1));
     }
 
-    concurrent::future<fixed_header> fixed_header_read(const io::shared_buffer& buff, std::size_t size_bytes) {
+    concurrent::future<fixed_header>
+    decode_header(const io::shared_buffer& buff, std::size_t size_bytes) {
+        using namespace std::placeholders;
+
         buff->flip();
         bool bytes_follow = (buff->last() & 0x80) && size_bytes < 4;
         if (bytes_follow) {
@@ -102,10 +128,8 @@ private:
                 "Fixed header is incomplete, some byte(s) follow; reading one more byte... ";
             buff->reset();
             buff->set_pos(size_bytes + 1);
-            return _conn->read(buff, 1)
-                .template fmap<fixed_header>(
-                    std::bind(&mqtt_session::fixed_header_read, 
-                        this->shared_from_this(), std::placeholders::_1, size_bytes + 1));
+            return _conn->read(buff, 1).fmap<fixed_header>(
+                std::bind(&mqtt_session::decode_header, self(), _1, size_bytes + 1));
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*buff);
             BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Fixed header read: " << header;
@@ -113,16 +137,16 @@ private:
         }
     }
 
-    concurrent::future<shared_message> read_complete_message(const io::shared_buffer& buff,
-                                                 const fixed_header& header) {
+    concurrent::future<shared_message>
+    read_message_from_header(const io::shared_buffer& buff, const fixed_header& header) {
+        using namespace std::placeholders;
+
         buff->reset();
         return _conn->read(buff, header.len)
-            .template map<shared_message>(
-                std::bind(&mqtt_session::process_content,
-                    this->shared_from_this(), header, std::placeholders::_1));
+            .map<shared_message>(std::bind(&mqtt_session::decode_content, self(), header, _1));
     }
 
-    shared_message process_content(const fixed_header& header, const io::shared_buffer& buff) {
+    shared_message decode_content(const fixed_header& header, const io::shared_buffer& buff) {
         buff->flip();
         auto expected_len = header.len;
         auto actual_len = buff->remaining();
@@ -142,28 +166,15 @@ private:
                     message_type_str(header.msg_type)));
         }
     }
-
-    concurrent::future<shared_message> deliver_message(const io::shared_buffer& buff, const shared_message& msg) {
-        return _msg_handler(msg);
-    }
-
-    concurrent::future<shared_message> send_message(const io::shared_buffer& buff, const shared_message& msg) {
-        throw std::runtime_error("send_message is not implemented");
-    }
-
-    void message_processed(const io::shared_buffer& buff, const shared_message& msg) {
-        BOOST_LOG_SEV(_log, util::log_level::DEBUG) << "Message " << *msg << " successfully processed";
-    }
-
 };
 
-template <class Connection, class MessageHandler>
-typename mqtt_session<Connection>::shared_ptr 
+template <class Connection, class MessageHandler, class Executor>
+typename mqtt_session<Connection, Executor>::shared_ptr
 make_mqtt_session(const typename Connection::shared_ptr& conn,
-                  const MessageHandler& msg_handler) {
-    auto session = std::shared_ptr<mqtt_session<Connection>>(
-        new mqtt_session<Connection>(conn, msg_handler));
-    session->start();
+                  const MessageHandler& msg_handler,
+                  const Executor& exec) {
+    using session_type = mqtt_session<Connection, Executor>;
+    auto session = std::shared_ptr<session_type>(new session_type(conn, msg_handler, exec));
     return session;
 }
 
