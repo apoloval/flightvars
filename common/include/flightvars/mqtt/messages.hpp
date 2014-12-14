@@ -107,7 +107,7 @@ public:
     const fixed_header& header() const { return _header; }
 
     /** Some `connect_message` if it contains a connect message, none otherwise. */
-    const util::option<connect_message>& connect() { return _connect; }
+    const util::option<connect_message>& connect() const { return _connect; }
 
     std::string str() const {
         return util::format("{ header: %s, content: %s}", header().str(), _content_str());
