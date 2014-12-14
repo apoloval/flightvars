@@ -38,11 +38,20 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(ConcurrentExecutorFunctions)
 
-BOOST_AUTO_TEST_CASE(MustRunFunctionWithArguments) {
+BOOST_AUTO_TEST_CASE(MustRunFunctionWithArgumentsInSameThread) {
     same_thread_executor exec;
     int num = 0;
     auto f = [&num](int n) { num = n; };
     run(exec, f, 2);
+    BOOST_CHECK_EQUAL(2, num);
+}
+
+BOOST_AUTO_TEST_CASE(MustRunFunctionWithArgumentsInAsioService) {
+    asio_service_executor exec;
+    int num = 0;
+    auto f = [&num](int n) { num = n; };
+    run(exec, f, 2);
+    exec.run();
     BOOST_CHECK_EQUAL(2, num);
 }
 

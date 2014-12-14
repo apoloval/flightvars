@@ -16,6 +16,7 @@
 
 namespace flightvars { namespace concurrent {
 
+/** An executor that runs all the tasks in the same thread that submits them. */
 class same_thread_executor {
 public:
 
@@ -27,6 +28,7 @@ public:
     void execute(Task task) { task(); }
 };
 
+/** An executor that wraps a Boost ASIO's `io_service` and uses it to execute tasks. */
 class asio_service_executor {
 public:
 
@@ -48,6 +50,7 @@ private:
     std::shared_ptr<boost::asio::io_service> _service;
 };
 
+/** Run the given function with the given arguments using the given executor. */
 template <class Executor, class Func, class ...Args>
 void run(Executor& exec, Func func, Args... args) {
     auto f = std::bind(func, args...);
