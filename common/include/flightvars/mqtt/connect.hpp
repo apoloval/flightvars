@@ -15,6 +15,7 @@
 #include <boost/format.hpp>
 
 #include <flightvars/mqtt/qos.hpp>
+#include <flightvars/util/format.hpp>
 #include <flightvars/util/option.hpp>
 #include <flightvars/util/exception.hpp>
 
@@ -41,11 +42,23 @@ public:
 
     const util::option<password> get_password() const { return _password; }
 
+    std::string str() const {
+        return util::format("%s%s", get_username(),
+            get_password()
+                .map<std::string>([](const password& pwd) { return util::format(":%s", pwd); })
+                .get_or_else(""));
+    }
+
 private:
 
     username _username;
     util::option<password> _password;
 };
+
+inline std::ostream& operator << (std::ostream& s, const connect_credentials& cred) {
+    s << cred.str();
+    return s;
+}
 
 class connect_will {
 public:
@@ -67,6 +80,10 @@ public:
 
     bool retain() const { return _retain; }
 
+    std::string str() const {
+        return util::format("%s <- %s (%s)", get_topic(), get_message(), get_qos());
+    }
+
 private:
 
     topic _topic;
@@ -74,6 +91,12 @@ private:
     qos_level _qos;
     bool _retain;
 };
+
+inline std::ostream& operator << (std::ostream& s, const connect_will& will) {
+    s << will.str();
+    return s;
+}
+
 
 class connect_message {
 public:
@@ -129,6 +152,22 @@ public:
 
     bool clean_session() const { return _clean_session; }
 
+    std::string str() const {
+        std::stringstream ss;
+        ss << "{ ";
+        ss << "ID: " << get_client_id();
+        get_credentials().for_each([&](const connect_credentials& cred) {
+            ss << ", CRED: " << cred;
+        });
+        get_will().for_each([&](const connect_will& will) {
+            ss << ", WILL: " << will;
+        });
+        ss << ", KA: " << keep_alive();
+        ss << ", CS: " << clean_session();
+        ss << "}";
+        return ss.str();
+    }
+
 private:
 
     client_id _id;
@@ -137,6 +176,11 @@ private:
     unsigned int _keep_alive;
     bool _clean_session;
 };
+
+inline std::ostream& operator << (std::ostream& s, const connect_message& msg) {
+    s << msg.str();
+    return s;
+}
 
 }}
 
