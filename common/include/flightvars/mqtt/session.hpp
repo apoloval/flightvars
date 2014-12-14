@@ -17,6 +17,8 @@
 #include <flightvars/mqtt/messages.hpp>
 #include <flightvars/util/logging.hpp>
 
+#include "mock_connection.hpp"
+
 namespace flightvars { namespace mqtt {
 
 FLIGHTVARS_DECL_EXCEPTION(session_error);

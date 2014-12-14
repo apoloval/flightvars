@@ -46,6 +46,7 @@ set(unittests_SOURCES
    test/concurrent/future-test.cpp
    test/concurrent/promise-test.cpp
    test/io/buffer-test.cpp
+   test/mqtt/mock_connection.hpp
    test/mqtt/decoder/connect-test.cpp
    test/mqtt/decoder/fixed-header-test.cpp
    test/mqtt/decoder/types-test.cpp
