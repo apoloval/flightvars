@@ -155,7 +155,9 @@ private:
                 "cannot process MQTT message content: "
                 "expected %d bytes of remaining length, but %d found", expected_len, actual_len));
         }
-        return decode(header, *buff);
+        auto msg = decode(header, *buff);
+        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Request message decoded: " << *msg;
+        return msg;
     }
 };
 

@@ -17,6 +17,7 @@
 #include <flightvars/mqtt/connect.hpp>
 #include <flightvars/mqtt/qos.hpp>
 #include <flightvars/util/exception.hpp>
+#include <flightvars/util/option.hpp>
 
 namespace flightvars { namespace mqtt {
 
@@ -87,17 +88,40 @@ inline std::ostream& operator << (std::ostream& s, const fixed_header& header) {
     return s;
 }
 
-struct message {
-    fixed_header header;
-    std::unique_ptr<connect_message> connect;
+/**
+ * A generic MQTT message.
+ *
+ * This class provides a way to store polymorphic MQTT messages. It wraps a fixed header and
+ * some implementation of a concrete MQTT message. On its constructor, the precise message
+ * instance is determined. The fixed header can be used to check what specific message is
+ * to be expected to be stored, and the different getters provides `util::option` instances
+ * of the different message types.
+ */
+class message {
+public:
 
     message(const fixed_header& hd, const connect_message& msg)
-      : header(hd), connect(new connect_message { msg }) {}
+      : _header(hd), _connect(util::make_some(msg)),
+        _content_str(std::bind(&connect_message::str, msg)) {}
+
+    const fixed_header& header() const { return _header; }
+
+    /** Some `connect_message` if it contains a connect message, none otherwise. */
+    const util::option<connect_message>& connect() { return _connect; }
+
+    std::string str() const {
+        return util::format("{ header: %s, content: %s}", header().str(), _content_str());
+    }
+
+private:
+
+    fixed_header _header;
+    util::option<connect_message> _connect;
+    std::function<std::string(void)> _content_str;
 };
 
 inline std::ostream& operator << (std::ostream& s, const message& msg) {
-    // TODO: implement this
-    s << "message";
+    s << msg.str();
     return s;
 }
 
