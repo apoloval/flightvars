@@ -155,15 +155,15 @@ public:
     std::string str() const {
         std::stringstream ss;
         ss << "{ ";
-        ss << "ID: " << get_client_id();
+        ss << "id: " << get_client_id();
         get_credentials().for_each([&](const connect_credentials& cred) {
-            ss << ", CRED: " << cred;
+            ss << ", cred: " << cred;
         });
         get_will().for_each([&](const connect_will& will) {
-            ss << ", WILL: " << will;
+            ss << ", will: " << will;
         });
-        ss << ", KA: " << keep_alive();
-        ss << ", CS: " << clean_session();
+        ss << ", ka: " << keep_alive();
+        ss << ", cs: " << clean_session();
         ss << "}";
         return ss.str();
     }
