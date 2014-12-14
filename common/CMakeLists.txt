@@ -33,13 +33,19 @@ set(flightvars_INCLUDE_DIR
    PARENT_SCOPE
 )
 
-set(flightvars_unittests_SOURCES
+include_directories(
+   ${CMAKE_CURRENT_SOURCE_DIR}/include
+   ${Boost_INCLUDE_DIR}
+)
+
+
+# Target: unit-tests
+set(unittests_SOURCES
+   test/unit-test.cpp
    test/concurrent/executor-test.cpp
    test/concurrent/future-test.cpp
    test/concurrent/promise-test.cpp
    test/io/buffer-test.cpp
-   test/io/tcp-server-it.cpp
-   test/main.cpp
    test/mqtt/decoder/connect-test.cpp
    test/mqtt/decoder/fixed-header-test.cpp
    test/mqtt/decoder/types-test.cpp
@@ -53,14 +59,22 @@ set(flightvars_unittests_SOURCES
    test/util/option-test.cpp
 )
 
-include_directories(
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${Boost_INCLUDE_DIR}
+add_executable(unit-tests ${unittests_SOURCES} ${flightvars_HEADERS})
+
+target_link_libraries(unit-tests ${Boost_LIBRARIES})
+
+
+# Target: integration-tests
+set(integrationtests_SOURCES
+   test/integration-test.cpp
+   test/io/tcp-server-it.cpp
 )
 
-add_executable(flightvars_unittests ${flightvars_unittests_SOURCES} ${flightvars_HEADERS})
+add_executable(integration-tests ${integrationtests_SOURCES} ${flightvars_HEADERS})
 
-target_link_libraries(flightvars_unittests ${Boost_LIBRARIES})
+target_link_libraries(integration-tests ${Boost_LIBRARIES})
 
+
+# Enable unit tests
 enable_testing()
 add_test(FlightVarsCommon-UnitTests flightvars_unittests)
