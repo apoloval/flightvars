@@ -260,6 +260,14 @@ make_future_success() {
     return f;
 }
 
+template <class T, class Exception>
+future<T> make_future_failure(const Exception& error) {
+    promise<T> p;
+    auto f = make_future(p);
+    p.set_failure(error);
+    return f;
+}
+
 }}
 
 #endif
