@@ -17,6 +17,25 @@
 namespace flightvars { namespace mqtt {
 
 /**
+ * Encode a MQTT message into the given buffer.
+ *
+ * The buffer is flipped after encoded bytes are transferred.
+ */
+void encode(const message& msg, io::buffer& buff) {
+    auto header = msg.header();
+    codecs::encoder<fixed_header>::encode(header, buff);
+    switch (header.msg_type) {
+        case message_type::CONNECT:
+            codecs::encoder<connect_message>::encode(msg.connect().get(), buff);
+            break;
+        default:
+            throw std::runtime_error(util::format("cannot encode message of unknown type %s",
+                message_type_str(header.msg_type)));
+    }
+    buff.flip();
+}
+
+/**
  * Decode a MQTT message from its fixed header and the buffer that contains the message content.
  *
  * The given buffer should be ready to extract the bytes corresponding to the message body.
