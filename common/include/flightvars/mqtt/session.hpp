@@ -78,7 +78,7 @@ private:
         using namespace std::placeholders;
 
         BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
-            "Processing new request for session on " << *_conn;
+            "Expecting new request for session on " << *_conn;
         read_request(buff)
             .fmap<shared_message>(_msg_handler, _exec)
             .fmap<void>(std::bind(&mqtt_session::write_response, self(), buff, _1), _exec)
@@ -88,7 +88,7 @@ private:
     concurrent::future<shared_message> read_request(const io::shared_buffer& buff) {
         using namespace std::placeholders;
 
-        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from connection";
+        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from " << *_conn;
         return read_header(buff).fmap<shared_message>(
             std::bind(&mqtt_session::read_message_from_header, self(), buff, _1));
     }
@@ -103,8 +103,7 @@ private:
             result.get();
             BOOST_LOG_SEV(_log, util::log_level::DEBUG) << 
                 "Request successfully processed on " << *_conn;
-            // TODO: enable this line to loop
-            // concurrent::run(_exec, &mqtt_session::process_request, self(), buff);
+            concurrent::run(_exec, &mqtt_session::process_request, self(), buff);
         } catch (const std::exception& e) {
             BOOST_LOG_SEV(_log, util::log_level::ERROR) << 
                 "Error while processing request on " << *_conn << ": " << e.what();

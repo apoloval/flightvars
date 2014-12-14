@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(Must)
     fixed_header fh = { 
         message_type::CONNECT, false, qos_level::QOS_0, false, 321 };
     connect_message msg("cli0", 30, false);
-    conn->prepare_read(fh, msg);
+    conn->prepare_read_message(message(fh, msg));
 
     auto session = make_session(conn, [](const shared_message& msg) {
         // TODO: return an actual response

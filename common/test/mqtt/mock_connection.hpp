@@ -10,26 +10,37 @@
 #ifndef FLIGHTVARS_IO_MOCK_CONNECTION_H
 #define FLIGHTVARS_IO_MOCK_CONNECTION_H
 
+#include <flightvars/mqtt/codecs.hpp>
+#include <flightvars/mqtt/messages.hpp>
+
 namespace flightvars { namespace mqtt {
 
-struct mock_connection {
-    using shared_ptr = std::shared_ptr<mock_connection>;
-    io::buffer read_buffer;
-    io::buffer write_buffer;
+FV_DECL_EXCEPTION(mock_connection_closed);
+
+class mock_connection {
+public:
+
+    using shared_ptr = std::shared_ptr<mock_connection>;    
 
     concurrent::future<io::shared_buffer> read(const io::shared_buffer& buff, std::size_t bytes) {
-        BOOST_CHECK_EQUAL(bytes, buff->write(read_buffer, bytes));
-        read_buffer.inc_pos(bytes);
+        if (_read_buffer.remaining() == 0) {
+            return concurrent::make_future_failure<io::shared_buffer>(
+                mock_connection_closed("mock connection is closed"));
+        }
+        BOOST_CHECK_EQUAL(bytes, buff->write(_read_buffer, bytes));
+        _read_buffer.inc_pos(bytes);
         return concurrent::make_future_success(buff);
     }
 
-    template <class Message>
-    void prepare_read(const fixed_header& hd, const Message& msg) {
-        read_buffer.reset();
-        codecs::encoder<fixed_header>::encode(hd, read_buffer);
-        codecs::encoder<Message>::encode(msg, read_buffer);
-        read_buffer.flip();
+    void prepare_read_message(const message& msg) {
+        _read_buffer.reset();
+        encode(msg, _read_buffer);
     }
+
+private:
+
+    io::buffer _read_buffer;
+    io::buffer _write_buffer;
 };
 
 std::ostream& operator << (std::ostream& s, const mock_connection& conn) {
