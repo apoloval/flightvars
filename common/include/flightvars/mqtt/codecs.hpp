@@ -11,6 +11,7 @@
 #define FLIGHTVARS_MQTT_CODECS_H
 
 #include <flightvars/mqtt/codecs/connect.hpp>
+#include <flightvars/mqtt/codecs/connect_ack.hpp>
 #include <flightvars/mqtt/codecs/fixed-header.hpp>
 #include <flightvars/mqtt/codecs/types.hpp>
 
@@ -28,6 +29,9 @@ void encode(const message& msg, io::buffer& buff) {
         case message_type::CONNECT:
             codecs::encoder<connect_message>::encode(msg.connect().get(), buff);
             break;
+        case message_type::CONNACK:
+            codecs::encoder<connect_ack_message>::encode(msg.connect_ack().get(), buff);
+            break;
         default:
             throw std::runtime_error(util::format("cannot encode message of unknown type %s",
                 message_type_str(header.msg_type)));
@@ -42,11 +46,12 @@ void encode(const message& msg, io::buffer& buff) {
  */
 shared_message decode(const fixed_header& header, io::buffer& buff) {
     switch (header.msg_type) {
-        case message_type::CONNECT: {
-            auto connect = codecs::decoder<connect_message>::decode(buff);
-            return std::make_shared<message>(header, connect);
-            break;
-        }
+        case message_type::CONNECT:
+            return std::make_shared<message>(
+                header, codecs::decoder<connect_message>::decode(buff));
+        case message_type::CONNACK:
+            return std::make_shared<message>(
+                header, codecs::decoder<connect_ack_message>::decode(buff));
         default:
             throw std::runtime_error(util::format("cannot decode message of unknown type %s",
                 message_type_str(header.msg_type)));

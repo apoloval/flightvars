@@ -15,6 +15,7 @@
 #include <boost/format.hpp>
 
 #include <flightvars/mqtt/connect.hpp>
+#include <flightvars/mqtt/connect_ack.hpp>
 #include <flightvars/mqtt/qos.hpp>
 #include <flightvars/util/exception.hpp>
 #include <flightvars/util/option.hpp>
@@ -104,10 +105,17 @@ public:
       : _header(hd), _connect(util::make_some(msg)),
         _content_str(std::bind(&connect_message::str, msg)) {}
 
+    message(const fixed_header& hd, const connect_ack_message& msg)
+      : _header(hd), _connect_ack(util::make_some(msg)),
+        _content_str(std::bind(&connect_ack_message::str, msg)) {}
+
     const fixed_header& header() const { return _header; }
 
     /** Some `connect_message` if it contains a connect message, none otherwise. */
     const util::option<connect_message>& connect() const { return _connect; }
+
+    /** Some `connect_ack_message` if it contains a connect ack message, none otherwise. */
+    const util::option<connect_ack_message>& connect_ack() const { return _connect_ack; }
 
     std::string str() const {
         return util::format("{ header: %s, content: %s}", header().str(), _content_str());
@@ -117,6 +125,7 @@ private:
 
     fixed_header _header;
     util::option<connect_message> _connect;
+    util::option<connect_ack_message> _connect_ack;
     std::function<std::string(void)> _content_str;
 };
 

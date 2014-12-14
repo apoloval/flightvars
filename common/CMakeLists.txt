@@ -12,7 +12,9 @@ set(flightvars_HEADERS
    include/flightvars/io/tcp-server.hpp
    include/flightvars/io/types.hpp
    include/flightvars/mqtt/connect.hpp
+   include/flightvars/mqtt/connect_ack.hpp
    include/flightvars/mqtt/codecs/connect.hpp
+   include/flightvars/mqtt/codecs/connect_ack.hpp
    include/flightvars/mqtt/codecs/fixed-header.hpp
    include/flightvars/mqtt/codecs/types.hpp
    include/flightvars/mqtt/codecs.hpp
@@ -48,9 +50,11 @@ set(unittests_SOURCES
    test/io/buffer-test.cpp
    test/mqtt/mock_connection.hpp
    test/mqtt/decoder/connect-test.cpp
+   test/mqtt/decoder/connect_ack-test.cpp
    test/mqtt/decoder/fixed-header-test.cpp
    test/mqtt/decoder/types-test.cpp
    test/mqtt/encoder/connect-test.cpp
+   test/mqtt/encoder/connect_ack-test.cpp
    test/mqtt/encoder/fixed-header-test.cpp
    test/mqtt/encoder/types-test.cpp
    test/mqtt/session-test.cpp
