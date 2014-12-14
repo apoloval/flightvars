@@ -17,6 +17,7 @@
 #include <flightvars/mqtt/connect.hpp>
 #include <flightvars/mqtt/connect_ack.hpp>
 #include <flightvars/mqtt/qos.hpp>
+#include <flightvars/mqtt/codecs/types.hpp>
 #include <flightvars/util/exception.hpp>
 #include <flightvars/util/option.hpp>
 
@@ -135,6 +136,36 @@ inline std::ostream& operator << (std::ostream& s, const message& msg) {
 }
 
 using shared_message = std::shared_ptr<message>;
+
+template <class Encoder = codecs::encoder<connect_message>>
+shared_message make_connect(const connect_message::client_id& id,
+                            const util::option<connect_credentials>& credentials,
+                            const util::option<connect_will>& will,
+                            unsigned int keep_alive,
+                            bool clean_session) {
+    connect_message msg = { id, credentials, will, keep_alive, clean_session };
+    fixed_header header = {
+        message_type::CONNECT,      // msg_type
+        false,                      // dup_flag
+        qos_level::QOS_0,           // qos
+        false,                      // retain
+        Encoder::encode_len(msg)    // length
+    };
+    return std::make_shared<message>(header, msg);
+}
+
+template <class Encoder = codecs::encoder<connect_ack_message>>
+shared_message make_connect_ack(connect_return_code ret_code) {
+    connect_ack_message msg = { ret_code };
+    fixed_header header = {
+        message_type::CONNACK,      // msg_type
+        false,                      // dup_flag
+        qos_level::QOS_0,           // qos
+        false,                      // retain
+        Encoder::encode_len(msg)    // length
+    };
+    return std::make_shared<message>(header, msg);
+}
 
 }}
 

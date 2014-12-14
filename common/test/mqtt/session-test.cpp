@@ -26,21 +26,28 @@ make_session(const mock_connection::shared_ptr& conn,
     return make_mqtt_session<mock_connection>(conn, handler, exec);
 }
 
-BOOST_AUTO_TEST_CASE(Must)
-{    
+BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
     auto conn = make_mock_connection();
     concurrent::asio_service_executor exec;
-    fixed_header fh = { 
-        message_type::CONNECT, false, qos_level::QOS_0, false, 321 };
-    connect_message msg("cli0", 30, false);
-    conn->prepare_read_message(message(fh, msg));
+    auto req_msg = make_connect(
+        "cli0", // client ID
+        util::make_some<connect_credentials>({ "john.williams", "leia" }),
+        util::make_some<connect_will>({ "mytopic", "mymessage", qos_level::QOS_0, false }),
+        30,     // keep alive
+        false   // clean session
+    );
+    conn->prepare_read_message(*req_msg);
+    shared_message handled_request;
 
-    auto session = make_session(conn, [](const shared_message& msg) {
-        // TODO: return an actual response
-        return concurrent::make_future_success(msg);
+    auto session = make_session(conn, [&](const shared_message& req_msg) {
+        handled_request = req_msg;
+        return concurrent::make_future_success(
+            make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
     }, exec);
     session->start();
     exec.run();
+
+    BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request->header().msg_type);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
