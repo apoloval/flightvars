@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(MustBeMoveable) {
     promise<int> p2(std::move(p1));
 
     BOOST_CHECK(!p1.is_valid());
-    BOOST_CHECK_THROW(p1.set_success(10), invalid_promise);
+    BOOST_CHECK_THROW(p1.set_success(10), bad_promise);
     BOOST_CHECK(p2.is_valid());
     BOOST_CHECK_NO_THROW(p2.set_success(10));
 }
@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(MustInvalidateAfterSetSuccess) {
 
     p.set_success(10);
     BOOST_CHECK(!p.is_valid());
-    BOOST_CHECK_THROW(p.set_success(11), invalid_promise);
+    BOOST_CHECK_THROW(p.set_success(11), bad_promise);
 }
 
 BOOST_AUTO_TEST_CASE(MustInvalidateAfterSetFailure) {
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(MustInvalidateAfterSetFailure) {
 
     p.set_failure(custom_exception("something went wrong"));
     BOOST_CHECK(!p.is_valid());
-    BOOST_CHECK_THROW(p.set_success(11), invalid_promise);
+    BOOST_CHECK_THROW(p.set_success(11), bad_promise);
 }
 
 BOOST_AUTO_TEST_CASE(MustInvokeListenersOnSetSuccess) {

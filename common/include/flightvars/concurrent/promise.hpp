@@ -17,8 +17,8 @@
 
 namespace flightvars { namespace concurrent {
 
+FV_DECL_EXCEPTION(bad_promise);
 FV_DECL_EXCEPTION(broken_promise);
-FV_DECL_EXCEPTION(invalid_promise);
 
 using namespace util;
 
@@ -113,7 +113,7 @@ private:
 
     void check_valid() {
         if (!is_valid()) {
-            throw invalid_promise("cannot operate on invalid promise");
+            throw bad_promise("cannot operate on invalid promise");
         }        
     }
 

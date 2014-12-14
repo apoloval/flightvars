@@ -24,7 +24,7 @@ BOOST_AUTO_TEST_CASE(MustFailToConstructOnInvalidPromise)
 {
     promise<int> p;
     p.set_success(10);
-    BOOST_CHECK_THROW(future<int> f(p), invalid_promise);
+    BOOST_CHECK_THROW(future<int> f(p), bad_promise);
 }
 
 BOOST_AUTO_TEST_CASE(MustBeNotCompletedIfPromiseIsUnset)

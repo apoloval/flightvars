@@ -20,9 +20,9 @@
 
 namespace flightvars { namespace concurrent {
 
-FV_DECL_EXCEPTION(uncompleted_future);
-FV_DECL_EXCEPTION(invalid_future);
+FV_DECL_EXCEPTION(bad_future);
 FV_DECL_EXCEPTION(future_timeout);
+FV_DECL_EXCEPTION(uncompleted_future);
 
 template <class T>
 class future {
