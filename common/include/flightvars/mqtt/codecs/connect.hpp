@@ -92,13 +92,13 @@ struct encoder<connect_message> {
         encoder<std::uint16_t>::encode(conn.keep_alive(), buff);
         encoder<std::string>::encode(conn.get_client_id(), buff);
 
-        conn.get_will().foreach([&](const connect_will& will) {
+        conn.get_will().for_each([&](const connect_will& will) {
             encoder<std::string>::encode(will.get_topic(), buff);
             encoder<std::string>::encode(will.get_message(), buff);
         });
-        conn.get_credentials().foreach([&](const connect_credentials& credentials) {
+        conn.get_credentials().for_each([&](const connect_credentials& credentials) {
             encoder<std::string>::encode(credentials.get_username(), buff);
-            credentials.get_password().foreach([&](const connect_credentials::password& pwd) {
+            credentials.get_password().for_each([&](const connect_credentials::password& pwd) {
                 encoder<std::string>::encode(pwd, buff);
             });
         });

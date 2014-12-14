@@ -96,7 +96,7 @@ public:
     }
 
     template <class Func>
-    void foreach(const Func& f) const {
+    void for_each(const Func& f) const {
         if (is_defined()) {
             f(get());
         }
