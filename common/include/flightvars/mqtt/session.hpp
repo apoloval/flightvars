@@ -155,16 +155,7 @@ private:
                 "cannot process MQTT message content: "
                 "expected %d bytes of remaining length, but %d found", expected_len, actual_len));
         }
-        switch (header.msg_type) {
-            case message_type::CONNECT: {
-                auto connect = codecs::decoder<connect_message>::decode(*buff);
-                return std::make_shared<message>(header, connect);
-                break;
-            }
-            default:
-                throw std::runtime_error(util::format("cannot decode message of unknown type %s", 
-                    message_type_str(header.msg_type)));
-        }
+        return decode(header, *buff);
     }
 };
 
