@@ -86,20 +86,23 @@ public:
     }
 
     template <class T1, class Func>
-    option<T1> map(const Func& f) const {
-        return is_defined() ? option<T1>(f(get())) : option<T1>();
+    option<T1> map(Func f) const {
+        return is_defined() ? make_some<T1>(f(get())) : make_none<T1>();
     }
 
     template <class T1, class Func>
-    option<T1> fmap(const Func& f) const {
-        return is_defined() ? f(get()) : option<T1>();
+    option<T1> fmap(Func f) const {
+        return is_defined() ? f(get()) : make_none<T1>();
+    }
+
+    template <class T1, class Func>
+    option<T1> fold(Func f, const T1& defval) const {
+        return is_defined() ? make_some<T1>(f(get())) : make_some(defval);
     }
 
     template <class Func>
     void for_each(const Func& f) const {
-        if (is_defined()) {
-            f(get());
-        }
+        if (is_defined()) { f(get()); }
     }
 
 private:
