@@ -17,6 +17,13 @@ using namespace flightvars::mqtt::codecs;
 
 BOOST_AUTO_TEST_SUITE(MqttEncoderConnectAck)
 
+BOOST_AUTO_TEST_CASE(MustReportEncodeLength) {
+    mqtt::connect_ack_message msg {
+        mqtt::connect_return_code::SERVER_UNAVAILABLE
+    };
+    BOOST_CHECK_EQUAL(2, encoder<mqtt::connect_ack_message>::encode_len(msg));
+}
+
 BOOST_AUTO_TEST_CASE(MustEncodeSimpleConnectAck) {
     io::buffer buff;
     mqtt::connect_ack_message msg {

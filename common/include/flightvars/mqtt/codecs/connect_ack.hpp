@@ -33,6 +33,8 @@ struct encoder<connect_ack_message> {
 
     using value_type = connect_ack_message;
 
+    static std::size_t encode_len(const value_type& conn) { return 2;  }
+
     static void encode(const value_type& conn_ack, io::buffer& buff) {
         encoder<std::uint8_t>::encode(0, buff); // first byte is reserved and unused
         encoder<std::uint8_t>::encode(static_cast<std::uint8_t>(conn_ack.return_code()), buff);

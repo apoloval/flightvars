@@ -17,6 +17,36 @@ using namespace flightvars::mqtt::codecs;
 
 BOOST_AUTO_TEST_SUITE(MqttEncoderConnect)
 
+BOOST_AUTO_TEST_CASE(MustReportEncodeLengthJustClientId) {
+    mqtt::connect_message conn {
+        "client",       // client ID
+        10,             // keep alive
+        false           // clean session
+    };
+    BOOST_CHECK_EQUAL(20, encoder<mqtt::connect_message>::encode_len(conn));
+}
+
+BOOST_AUTO_TEST_CASE(MustReportEncodeLengthClientIdAndWill) {
+    mqtt::connect_message conn {
+        "client",       // client ID
+        mqtt::connect_will { "foo", "bar", mqtt::qos_level::QOS_0, false } ,
+        10,             // keep alive
+        false           // clean session
+    };
+    BOOST_CHECK_EQUAL(30, encoder<mqtt::connect_message>::encode_len(conn));
+}
+
+BOOST_AUTO_TEST_CASE(MustReportEncodeLengthAllPayload) {
+    mqtt::connect_message conn {
+        "client",       // client ID
+        mqtt::connect_credentials { "john.barry", "socks" },
+        mqtt::connect_will { "foo", "bar", mqtt::qos_level::QOS_0, false } ,
+        10,             // keep alive
+        false           // clean session
+    };
+    BOOST_CHECK_EQUAL(49, encoder<mqtt::connect_message>::encode_len(conn));
+}
+
 BOOST_AUTO_TEST_CASE(MustEncodeSimpleConnect) {
     io::buffer buff;
     mqtt::connect_message conn(

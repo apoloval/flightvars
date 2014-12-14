@@ -84,6 +84,20 @@ struct encoder<connect_message> {
 
     using value_type = connect_message;
 
+    static std::size_t encode_len(const value_type& conn) {
+        using namespace std::placeholders;
+
+        return 12 +
+            string_sizeof(conn.get_client_id()) +
+            conn.get_will().fold<std::size_t>([](const connect_will& will) {
+                return string_sizeof(will.get_topic()) + string_sizeof(will.get_message());
+            }, 0).get() +
+            conn.get_credentials().fold<std::size_t>([](const connect_credentials& cred) {
+                return string_sizeof(cred.get_username()) +
+                    cred.get_password().fold<std::size_t>(std::bind(&string_sizeof, _1), 0).get();
+            }, 0).get();
+    }
+
     static void encode(const value_type& conn, io::buffer& buff) {
         encoder<std::string>::encode("MQIsdp", buff);
         encoder<std::uint8_t>::encode(3, buff);
@@ -105,6 +119,8 @@ struct encoder<connect_message> {
     }
 
 private:
+
+    static std::size_t string_sizeof(const std::string& s) { return 2 + s.length(); }
 
     static void encode_flags(const value_type& conn, io::buffer& buff) {
         std::uint8_t byte = 0;
