@@ -116,7 +116,7 @@ BOOST_AUTO_TEST_CASE(MustSetValueFromVoidPromise) {
 BOOST_AUTO_TEST_CASE(MustSetExceptionFromVoidPromise) {
     promise<void> p;
     auto f = p.get_future();
-    p.set_exception(custom_exception("failure"));
+    p.set_failure(custom_exception("failure"));
     BOOST_CHECK_THROW(f.get(), custom_exception);
 }
 

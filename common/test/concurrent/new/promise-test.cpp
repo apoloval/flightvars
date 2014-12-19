@@ -32,7 +32,7 @@ BOOST_AUTO_TEST_CASE(MustResetAfterSetValue) {
 
 BOOST_AUTO_TEST_CASE(MustResetAfterSetException) {
     promise<std::string> p;
-    p.set_exception(custom_exception("bad luck"));
+    p.set_failure(custom_exception("bad luck"));
     BOOST_CHECK(!p.valid());
 }
 

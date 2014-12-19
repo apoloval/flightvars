@@ -43,32 +43,24 @@ public:
 
     template <class U = T>
     typename std::enable_if<!std::is_void<U>::value>::type
-    set_value(const U& value) {
-        check_valid();
-        _state.push_success(value);
-        _state.reset();
-    }
+    set_value(const U& value) { set(util::make_success<T>(value)); }
 
     template <class U = T>
     typename std::enable_if<!std::is_void<U>::value>::type
-    set_value(U&& value) {
-        check_valid();
-        _state.push_success(std::move(value));
-        _state.reset();
-    }
+    set_value(U&& value) { set(util::make_success<T>(std::move(value))); }
 
     template <class U = T>
     typename std::enable_if<std::is_void<U>::value>::type
-    set_value(const U* = 0) {
-        check_valid();
-        _state.push_success();
-        _state.reset();
-    }
+    set_value() { set(util::make_success<void>()); }
+
+    void set_exception(const std::exception_ptr e) { set(util::attempt<T>(e)); }
 
     template <class Exception>
-    void set_exception(const Exception& e) {
+    void set_failure(const Exception& e) { set(util::make_failure<T>(e)); }
+
+    void set(util::attempt<T>&& result) {
         check_valid();
-        _state.push_failure(e);
+        _state.push(std::move(result));
         _state.reset();
     }
 
