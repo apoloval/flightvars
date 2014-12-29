@@ -10,6 +10,8 @@
 #ifndef FLIGHTVARS_CONCURRENT_SHARED_STATE_H
 #define FLIGHTVARS_CONCURRENT_SHARED_STATE_H
 
+#include <mutex>
+
 #include <flightvars/util/attempt.hpp>
 #include <flightvars/util/exception.hpp>
 #include <flightvars/util/option.hpp>
@@ -22,40 +24,33 @@ template <class T>
 class shared_state {
 public:
 
-    shared_state() : _state(std::make_shared<state>()) {}
+    shared_state() : _control(std::make_shared<control_block>()) {}
     shared_state(const shared_state&) = default;
     shared_state(shared_state&&) = default;
 
     shared_state& operator = (const shared_state&) = default;
     shared_state& operator = (shared_state&&) = default;
 
-    bool valid() const { return !!_state; }
+    bool valid() const { return !!_control; }
 
     void reset() {
-        _state = nullptr;
+        _control = nullptr;
     }
 
     template <class F>
     void set_push_handler(F&& f) {
         check_valid();
-        _state->_push_handler = f;
-        if (_state->_retained.is_defined()) {
-            f(_state->_retained.extract());
-        }
+        _control->set_push_handler(f);
     }
 
     void clear_push_handler() {
         check_valid();
-        _state->_push_handler = nullptr;
+        _control->clear_push_handler();
     }
 
     void push(util::attempt<T>&& value) {
         check_valid();
-        if (!!_state->_push_handler) {
-            _state->_push_handler(std::move(value));
-        } else {
-            _state->_retained = std::move(value);
-        }
+        _control->push(std::move(value));
     }
 
     template <class U = T>
@@ -75,12 +70,39 @@ public:
 
 private:
 
-    struct state {
+    class control_block {
+    public:
+
+        template <class F>
+        void set_push_handler(F&& f) {
+            std::unique_lock<std::recursive_mutex> lock(_mutex);
+            _push_handler = f;
+            if (_retained.is_defined()) {
+                f(_retained.extract());
+            }
+        }
+
+        void clear_push_handler() {
+            std::unique_lock<std::recursive_mutex> lock(_mutex);
+            _push_handler = nullptr;
+        }
+
+        void push(util::attempt<T>&& value) {
+            std::unique_lock<std::recursive_mutex> lock(_mutex);
+            if (!!_push_handler) {
+                _push_handler(std::move(value));
+            } else {
+                _retained = std::move(value);
+            }
+        }
+
+    private:
+        mutable std::recursive_mutex _mutex;
         util::option<util::attempt<T>> _retained;
         std::function<void(util::attempt<T>)> _push_handler;
     };
 
-    std::shared_ptr<state> _state;
+    std::shared_ptr<control_block> _control;
 
     void check_valid() {
         if (!valid()) {
