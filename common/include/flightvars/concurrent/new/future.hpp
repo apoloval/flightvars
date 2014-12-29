@@ -29,7 +29,8 @@ public:
 
     future() { _state.reset(); }
 
-    future(future&& other) : _state(std::move(other._state)) {
+    future(future&& other) : _state(std::move(other._state)),
+                             _result(std::move(other._result)) {
         reset_push_handler();
     }
 
@@ -129,6 +130,22 @@ private:
 
     void reset() { _state.reset(); }
 };
+
+template <class T>
+future<T> make_future_success(T&& value) {
+    promise<T> p;
+    auto f = p.get_future();
+    p.set_value(value);
+    return f;
+}
+
+template <class T, class E>
+future<T> make_future_failure(E&& error) {
+    promise<T> p;
+    auto f = p.get_future();
+    p.set_failure(error);
+    return f;
+}
 
 }}}
 

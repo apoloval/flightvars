@@ -19,6 +19,16 @@ BOOST_AUTO_TEST_SUITE(ConcurrentNewFuture)
 
 FV_DECL_EXCEPTION(custom_exception);
 
+BOOST_AUTO_TEST_CASE(MustMakeFutureSuccess) {
+    auto f = make_future_success<std::string>("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", f.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustMakeFutureFailure) {
+    auto f = make_future_failure<std::string>(custom_exception("failed"));
+    BOOST_CHECK_THROW(f.get(), custom_exception);
+}
+
 BOOST_AUTO_TEST_CASE(MustInitInvalidWithDefaultConstructor) {
     future<std::string> f;
     BOOST_CHECK(!f.valid());
