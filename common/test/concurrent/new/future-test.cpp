@@ -130,4 +130,78 @@ BOOST_AUTO_TEST_CASE(MustSetExceptionFromVoidPromise) {
     BOOST_CHECK_THROW(f.get(), custom_exception);
 }
 
+BOOST_AUTO_TEST_CASE(MustBeInvalidAfterThen) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.then([](std::string s) { return s.length(); });
+    BOOST_CHECK(!f1.valid());
+    BOOST_CHECK(f2.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustBeInvalidAfterNext) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    BOOST_CHECK(!f1.valid());
+    BOOST_CHECK(f2.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustBeInvalidAfterFinally) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    util::attempt<std::string> result;
+    f.finally([&](util::attempt<std::string> r) {
+        result = std::move(r);
+    });
+    BOOST_CHECK(!f.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnThen) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.then([](std::string s) { return s.length(); });
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL(6, f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnNext) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL(6, f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustThrowFailureOnNext) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<std::size_t>([](std::string s) -> future<std::size_t> {
+        throw custom_exception("failed");
+    });
+    p.set_value("Hello!");
+    BOOST_CHECK_THROW(f2.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnFinally) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    util::attempt<std::string> result;
+    f.finally([&](util::attempt<std::string> r) {
+        result = std::move(r);
+    });
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", result.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnFinallyAfterResult) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    p.set_value("Hello!");
+    util::attempt<std::string> result;
+    f.finally([&](util::attempt<std::string> r) {
+        result = std::move(r);
+    });
+    BOOST_CHECK_EQUAL("Hello!", result.get());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

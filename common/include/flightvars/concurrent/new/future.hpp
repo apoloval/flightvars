@@ -13,6 +13,7 @@
 #include <condition_variable>
 #include <mutex>
 
+#include <flightvars/concurrent/executor.hpp>
 #include <flightvars/concurrent/new/shared_state.hpp>
 
 namespace flightvars { namespace concurrent { namespace newwave {
@@ -27,7 +28,7 @@ public:
     static_assert(std::is_void<T>::value || std::is_move_constructible<T>::value,
         "cannot instantiate a future with a non move-constructible type");
 
-    future() { _state.reset(); }
+    future() { reset_state(); }
 
     future(future&& other) : _state(std::move(other._state)),
                              _result(std::move(other._result)) {
@@ -92,6 +93,45 @@ public:
         }
     }
 
+    template <class Func, class Executor = same_thread_executor>
+    future<typename std::result_of<Func(T)>::type>
+    then(Func&& func, Executor&& exec = Executor()) {
+        using U = typename std::result_of<Func(T)>::type;
+        auto p = std::make_shared<promise<U>>();
+        set_push_handler([p, func](util::attempt<T> result) mutable {
+            try { p->set_value(func(result.extract())); }
+            catch (...) { p->set_exception(std::current_exception()); }
+        }, exec);
+        reset_state();
+        return p->get_future();
+    }
+
+    template <class U, class Func, class Executor = same_thread_executor>
+    future<U> next(Func&& func, Executor&& exec = Executor()) {
+        auto p = std::make_shared<promise<U>>();
+        set_push_handler([p, func, exec](util::attempt<T> result) mutable {
+            try {
+                auto f = func(result.extract());
+                f.finally([p, exec](util::attempt<U> other_result) {
+                    try { p->set_value(other_result.extract()); }
+                    catch (...) { p->set_exception(std::current_exception()); }
+                }, exec);
+            }
+            catch (...) { p->set_exception(std::current_exception()); }
+        }, exec);
+        reset_state();
+        return p->get_future();
+    }
+
+    template <class Func, class Executor = same_thread_executor>
+    void finally(Func&& f, Executor&& exec = Executor()) {
+        std::unique_lock<std::recursive_mutex> lock(_mutex);
+        check_valid();
+        if (is_completed()) { run(exec, f, _result); }
+        else { set_push_handler(f, exec); }
+        reset_state();
+    }
+
 private:
 
     template <class U>
@@ -103,8 +143,10 @@ private:
     mutable std::condition_variable_any _completion_cond;
 
     future(const shared_state<T>& state) : _state(state) {
-        _state.set_push_handler(std::bind(&future::result_handler, this, std::placeholders::_1));
+        reset_push_handler();
     }
+
+    void reset_state() { _state.reset(); }
 
     void result_handler(util::attempt<T> result) {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
@@ -113,7 +155,16 @@ private:
     }
 
     void reset_push_handler() {
-        _state.set_push_handler(std::bind(&future::result_handler, this, std::placeholders::_1));
+        set_push_handler(
+            std::bind(&future::result_handler, this, std::placeholders::_1),
+            same_thread_executor());
+    }
+
+    template <class Func, class Executor>
+    void set_push_handler(Func&& handler, Executor&& exec) {
+        _state.set_push_handler([=](util::attempt<T> result) mutable {
+            run(exec, handler, std::move(result));
+        });
     }
 
     void clear_push_handler() {
