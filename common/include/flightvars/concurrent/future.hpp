@@ -10,244 +10,217 @@
 #ifndef FLIGHTVARS_CONCURRENT_FUTURE_H
 #define FLIGHTVARS_CONCURRENT_FUTURE_H
 
+#include <iostream> // TODO: remove this
 #include <condition_variable>
-#include <list>
+#include <mutex>
 
 #include <flightvars/concurrent/executor.hpp>
-#include <flightvars/concurrent/promise.hpp>
-#include <flightvars/util/attempt.hpp> 
-#include <flightvars/util/option.hpp>
+#include <flightvars/concurrent/shared_state.hpp>
 
 namespace flightvars { namespace concurrent {
 
 FV_DECL_EXCEPTION(bad_future);
 FV_DECL_EXCEPTION(future_timeout);
-FV_DECL_EXCEPTION(uncompleted_future);
 
 template <class T>
 class future {
 public:
 
-    static_assert(std::is_void<T>::value || std::is_copy_constructible<T>::value, 
-        "cannot instantiate a future with a non-copy constructible type");
+    static_assert(std::is_void<T>::value || std::is_move_constructible<T>::value,
+        "cannot instantiate a future with a non move-constructible type");
 
-    using listener = std::function<void(const attempt<T>&)>;
+    future() { reset_state(); }
 
-    future(promise<T>& p) : _core(new core()) {
-        p.add_listener(
-            std::bind(&core::on_complete, _core, std::placeholders::_1));
+    future(future&& other) : _state(std::move(other._state)),
+                             _result(std::move(other._result)) {
+        reset_push_handler();
     }
+
+    future(const future&) = delete;
 
     ~future() {
+        clear_push_handler();
     }
 
-    future(const future& other) : _core(other._core) {}
+    future& operator = (future&& other) {
+        clear_push_handler();
+        _state = std::move(other._state);
+        _result = std::move(other._result);
+        reset_push_handler();
+        return *this;
+    }
 
-    bool is_completed() const { return _core->is_completed(); }
+    bool valid() const { return _state.valid(); }
+
+    bool is_completed() const {
+        std::lock_guard<std::recursive_mutex> lock(_mutex);
+        return _result.valid();
+    }
 
     template <class U = T>
-    typename std::enable_if<!std::is_void<U>::value, const U&>::type
-    get() const { return _core->get(); }
+    typename std::enable_if<!std::is_void<U>::value, U>::type
+    get() {
+        std::lock_guard<std::recursive_mutex> lock(_mutex);
+        wait();
+        check_valid(); // someone else could be getting, so it could be invalid after wait
+        return _result.extract();
+    }
 
     template <class U = T>
-    typename std::enable_if<std::is_void<U>::value>::type
-    get() const { return _core->get(); }
-
-    template <class Executor = concurrent::same_thread_executor>
-    void add_listener(const listener& l, const Executor& exec = Executor()) {
-        _core->add_listener(std::bind(
-            concurrent::run<Executor, listener, attempt<T>>,
-            exec, l, std::placeholders::_1));
+    typename std::enable_if<std::is_void<U>::value, U>::type
+    get() {
+        wait();
+        _result.get();
     }
 
-    template <class U, class Func, class Executor = concurrent::same_thread_executor>
-    future<U> map(Func map, const Executor& exec = Executor()) {
-        auto p = std::make_shared<promise<U>>();
-        auto f = make_future(*p);
-        add_listener([p, map](const attempt<T>& result) {
-            try {                
-                consolidate_map(p, result, map);
-            } catch(...) {
-                p->set_failure(std::current_exception());
-            }
-        }, exec);
-        return f; 
-    }
-
-    template <class U, class Func, class Executor = concurrent::same_thread_executor>
-    future<U> fmap(Func map, const Executor& exec = Executor()) {
-        auto p = std::make_shared<promise<U>>();
-        auto f = make_future(*p);
-        add_listener([p, map](const attempt<T>& result) {
-            try {
-                consolidate_fmap(p, result, map);
-            } catch(...) {
-                p->set_failure(std::current_exception());
-            }
-        }, exec);
-        return f; 
-    }
-
-    template <class R, class P>    
-    void wait_completion(const std::chrono::duration<R,P>& timeout) const {
-        _core->wait_completion(timeout);
-    }
-
-    template <class R, class P, class U = T>
-    typename std::enable_if<!std::is_void<U>::value, const U&>::type
-    wait_result(const std::chrono::duration<R,P>& timeout) const {
-        wait_completion(timeout);
-        return get();
-    }
-
-    template <class R, class P, class U = T>
-    typename std::enable_if<std::is_void<U>::value>::type
-    wait_result(const std::chrono::duration<R,P>& timeout) const {
-        wait_completion(timeout);
-        return get();
-    }
-
-private:
-
-    struct core {
-        std::list<listener> _listeners;
-        option<attempt<T>> _result;
-        mutable std::recursive_mutex _mutex;
-        mutable std::condition_variable_any _completion_cond;
-
-        bool is_completed() const { 
-            std::lock_guard<std::recursive_mutex> lock(_mutex);
-            return _result.is_defined(); 
+    void wait() const {
+        std::unique_lock<std::recursive_mutex> lock(_mutex);
+        check_valid();
+        auto completed = std::bind(&future::is_completed, this);
+        if (!completed()) {
+            _completion_cond.wait(lock, completed);
         }
+    }
 
-        template <class U = T>
-        typename std::enable_if<!std::is_void<U>::value, const U&>::type
-        get() const {
-            std::lock_guard<std::recursive_mutex> lock(_mutex);
-            if (is_completed()) {
-                return _result.get().get();
-            } else {
-                throw uncompleted_future(
-                    "cannot get value since future is still uncompleted");
-            }
-        }
-
-        template <class U = T>
-        typename std::enable_if<std::is_void<U>::value>::type
-        get() const {
-            std::lock_guard<std::recursive_mutex> lock(_mutex);
-            if (is_completed()) {
-                _result.get().get();
-            } else {
-                throw uncompleted_future(
-                    "cannot get value since future is still uncompleted");
-            }
-        }
-
-        void add_listener(const listener& l) {
-            std::lock_guard<std::recursive_mutex> lock(_mutex);
-            if (is_completed()) {
-                l(_result.get());
-            } else {
-                _listeners.push_back(l);
-            }
-        }
-
-        template <class R, class P>
-        void wait_completion(const std::chrono::duration<R,P>& timeout) const {
-            std::unique_lock<std::recursive_mutex> lock(_mutex);
-            auto completion = std::bind(&core::is_completed, this);
-            if (!_completion_cond.wait_for(lock, timeout, completion)) {
+    template <class R, class P>
+    void wait_for(const std::chrono::duration<R,P>& timeout) const {
+        std::unique_lock<std::recursive_mutex> lock(_mutex);
+        check_valid();
+        auto completed = std::bind(&future::is_completed, this);
+        if (!completed()) {
+            if (!_completion_cond.wait_for(lock, timeout, completed)) {
                 throw future_timeout(
                     "future timeout while waiting for completion");
             }
         }
+    }
 
-        void on_complete(const util::attempt<T>& result) {
-            _result = make_some(result);
-            for (auto l : _listeners) {
-                try { l(result); }
-                catch (...) {} // ignore exceptions thrown by listeners
+    template <class R, class P, class U = T>
+    typename std::enable_if<!std::is_void<U>::value, U>::type
+    get_for(const std::chrono::duration<R,P>& timeout) {
+        wait_for(timeout);
+        return get();
+    }
+
+    template <class R, class P, class U = T>
+    typename std::enable_if<std::is_void<U>::value, U>::type
+    get_for(const std::chrono::duration<R,P>& timeout) {
+        wait_for(timeout);
+        get();
+    }
+
+    template <class Func, class Executor = same_thread_executor>
+    future<typename std::result_of<Func(T)>::type>
+    then(Func&& func, Executor&& exec = Executor()) {
+        using U = typename std::result_of<Func(T)>::type;
+        auto p = std::make_shared<promise<U>>();
+        set_push_handler([p, func](util::attempt<T> result) mutable {
+            auto mapped = result.map(func);
+            p->set(std::move(mapped));
+        }, exec);
+        reset_state();
+        return p->get_future();
+    }
+
+    template <class U, class Func, class Executor = same_thread_executor>
+    future<U> next(Func&& func, Executor&& exec = Executor()) {
+        auto p = std::make_shared<promise<U>>();
+        set_push_handler([p, func, exec](util::attempt<T> result) mutable {
+            try {
+                auto f = func(result.extract());
+                f.finally([p, exec](util::attempt<U> other_result) {
+                    p->set(std::move(other_result));
+                }, exec);
             }
+            catch (...) { p->set_exception(std::current_exception()); }
+        }, exec);
+        reset_state();
+        return p->get_future();
+    }
 
+    template <class Func, class Executor = same_thread_executor>
+    void finally(Func&& f, Executor&& exec = Executor()) {
+        std::unique_lock<std::recursive_mutex> lock(_mutex);
+        check_valid();
+        set_push_handler(f, exec);
+        reset_state();
+    }
+
+private:
+
+    template <class U>
+    friend class promise;
+
+    shared_state<T> _state;
+    util::attempt<T> _result;
+    mutable std::recursive_mutex _mutex;
+    mutable std::condition_variable_any _completion_cond;
+
+    future(const shared_state<T>& state) : _state(state) {
+        reset_push_handler();
+    }
+
+    void reset_state() { _state.reset(); }
+
+    void result_handler(util::attempt<T> result) {
+        std::lock_guard<std::recursive_mutex> lock(_mutex);
+        _result = std::move(result);
+        _completion_cond.notify_all();
+    }
+
+    void reset_push_handler() {
+        set_push_handler(
+            std::bind(&future::result_handler, this, std::placeholders::_1),
+            same_thread_executor());
+    }
+
+    template <class Func, class Executor>
+    void set_push_handler(Func&& handler, Executor&& exec) {
+        if (is_completed()) {
+            run(exec, handler, std::move(_result));
+        } else {
+            _state.set_push_handler([=](util::attempt<T> result) mutable {
+                run(exec, handler, std::move(result));
+            });
         }
-    };
-
-    using shared_core = std::shared_ptr<core>;
-
-    shared_core _core;
-
-    template <class U, class Func, class V = T>
-    static typename std::enable_if<std::is_void<V>::value && std::is_void<U>::value>::type
-    consolidate_map(const shared_promise<U>& p, const attempt<V>& result, Func map) {
-        static_assert(std::is_same<decltype(map()), U>::value, 
-            "cannot invoke map with a function that doesn't return T");
-        result.get();
-        map();
-        p->set_success();
     }
 
-    template <class U, class Func, class V = T>
-    static typename std::enable_if<std::is_void<V>::value && !std::is_void<U>::value>::type
-    consolidate_map(const shared_promise<U>& p, const attempt<V>& result, Func map) {
-        static_assert(std::is_same<decltype(map()), U>::value, 
-            "cannot invoke map with a function that doesn't return T");
-        result.get();
-        p->set_success(map());
+    void clear_push_handler() {
+        if (_state.valid()) {
+            _state.clear_push_handler();
+        }
     }
 
-    template <class U, class Func, class V = T>
-    static typename std::enable_if<!std::is_void<V>::value && std::is_void<U>::value>::type
-    consolidate_map(const shared_promise<U>& p, const attempt<V>& result, Func map) {
-        static_assert(std::is_same<decltype(map(result.get())), U>::value, 
-            "cannot invoke map with a function that doesn't return T");
-        map(result.get());
-        p->set_success();
+    void check_valid() const {
+        if (!valid()) {
+            throw bad_future("operation not allowed on not valid future");
+        }
     }
 
-    template <class U, class Func, class V = T>
-    static typename std::enable_if<!std::is_void<V>::value && !std::is_void<U>::value>::type
-    consolidate_map(const shared_promise<U>& p, const attempt<V>& result, Func map) {
-        static_assert(std::is_same<decltype(map(result.get())), U>::value, 
-            "cannot invoke map with a function that doesn't return T");
-        p->set_success(map(result.get()));
-    }
-
-    template <class U, class Func, class V = T>
-    static typename std::enable_if<!std::is_void<V>::value>::type
-    consolidate_fmap(const shared_promise<U>& p, const attempt<V>& result, Func map) {
-        static_assert(std::is_same<decltype(map(result.get())), future<U>>::value, 
-            "cannot invoke fmap with a function that doesn't return future<T>");
-        auto mapped = map(result.get());
-        mapped.add_listener([p](const attempt<U>& other_result) {
-            p->set(other_result);
-        });
-    }
-
-    template <class U, class Func, class V = T>
-    static typename std::enable_if<std::is_void<V>::value>::type
-    consolidate_fmap(const shared_promise<U>& p, const attempt<V>& result, Func map) {
-        static_assert(std::is_same<decltype(map()), future<U>>::value, 
-            "cannot invoke fmap with a function that doesn't return future<T>");
-        result.get();
-        auto mapped = map();
-        mapped.add_listener([p](const attempt<U>& other_result) {
-            p->set(other_result);
-        });
-    }
+    void reset() { _state.reset(); }
 };
 
+}}
+
+#include <flightvars/concurrent/promise.hpp>
+
+namespace flightvars { namespace concurrent {
+
 template <class T>
-future<T> make_future(promise<T>& p) {
-    return future<T>(p);
+typename std::enable_if<!std::is_void<T>::value, future<T>>::type
+make_future_success(const T& value) {
+    promise<T> p;
+    auto f = p.get_future();
+    p.set_value(value);
+    return f;
 }
 
 template <class T>
 typename std::enable_if<!std::is_void<T>::value, future<T>>::type
-make_future_success(const T& t) {
+make_future_success(T&& value) {
     promise<T> p;
-    auto f = make_future(p);
-    p.set_success(t);
+    auto f = p.get_future();
+    p.set_value(std::move(value));
     return f;
 }
 
@@ -255,15 +228,15 @@ template <class T>
 typename std::enable_if<std::is_void<T>::value, future<T>>::type
 make_future_success() {
     promise<T> p;
-    auto f = make_future(p);
-    p.set_success();
+    auto f = p.get_future();
+    p.set_value();
     return f;
 }
 
-template <class T, class Exception>
-future<T> make_future_failure(const Exception& error) {
+template <class T, class E>
+future<T> make_future_failure(E&& error) {
     promise<T> p;
-    auto f = make_future(p);
+    auto f = p.get_future();
     p.set_failure(error);
     return f;
 }

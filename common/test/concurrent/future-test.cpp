@@ -9,273 +9,242 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <thread>
-
 #include <flightvars/concurrent/future.hpp>
 #include <flightvars/concurrent/promise.hpp>
 
+using namespace flightvars;
 using namespace flightvars::concurrent;
 
 BOOST_AUTO_TEST_SUITE(ConcurrentFuture)
 
 FV_DECL_EXCEPTION(custom_exception);
 
-BOOST_AUTO_TEST_CASE(MustFailToConstructOnInvalidPromise)
-{
-    promise<int> p;
-    p.set_success(10);
-    BOOST_CHECK_THROW(future<int> f(p), bad_promise);
+BOOST_AUTO_TEST_CASE(MustMakeFutureSuccess) {
+    auto f = make_future_success<std::string>("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", f.get());
 }
 
-BOOST_AUTO_TEST_CASE(MustBeNotCompletedIfPromiseIsUnset)
-{
-    promise<int> p;
-    future<int> f(p);
-    BOOST_CHECK(!f.is_completed());
-    BOOST_CHECK_THROW(f.get(), uncompleted_future);
+BOOST_AUTO_TEST_CASE(MustMakeFutureSuccessVoid) {
+    auto f = make_future_success<void>();
+    BOOST_CHECK_NO_THROW(f.get());
 }
 
-BOOST_AUTO_TEST_CASE(MustBeCompletedIfPromiseIsSetToSuccess)
-{
-    promise<int> p;
-    future<int> f(p);
-
-    p.set_success(10);
-    BOOST_CHECK(f.is_completed());
-    BOOST_CHECK_EQUAL(10, f.get());
-}
-
-BOOST_AUTO_TEST_CASE(MustBeCompletedIfPromiseIsSetToFailure)
-{
-    promise<int> p;
-    future<int> f(p);
-
-    p.set_failure(custom_exception("something went wrong"));
-    BOOST_CHECK(f.is_completed());
+BOOST_AUTO_TEST_CASE(MustMakeFutureFailure) {
+    auto f = make_future_failure<std::string>(custom_exception("failed"));
     BOOST_CHECK_THROW(f.get(), custom_exception);
 }
 
-BOOST_AUTO_TEST_CASE(MustBeCopyable)
-{
-    promise<int> p;
-    future<int> f1(p);
-    future<int> f2(f1);
-
-    BOOST_CHECK(!f1.is_completed());
-    BOOST_CHECK(!f2.is_completed());
-    BOOST_CHECK_THROW(f1.get(), uncompleted_future);
-    BOOST_CHECK_THROW(f2.get(), uncompleted_future);
-
-    p.set_success(10);
-
-    BOOST_CHECK(f1.is_completed());
-    BOOST_CHECK(f2.is_completed());
-    BOOST_CHECK_EQUAL(10, f1.get());
-    BOOST_CHECK_EQUAL(10, f2.get());
+BOOST_AUTO_TEST_CASE(MustInitInvalidWithDefaultConstructor) {
+    future<std::string> f;
+    BOOST_CHECK(!f.valid());
 }
 
-BOOST_AUTO_TEST_CASE(MustCompleteWithBrokenPromiseIfPromiseIsLost)
-{
-    std::unique_ptr<future<int>> f;
-    {
-        promise<int> p;
-        f.reset(new future<int>(p));
-    }
-    BOOST_CHECK(f->is_completed());
-    BOOST_CHECK_THROW(f->get(), broken_promise);
+BOOST_AUTO_TEST_CASE(MustThrowOnGetWhenNotValid) {
+    future<std::string> f;
+    BOOST_CHECK_THROW(f.get(), bad_future);
 }
 
-BOOST_AUTO_TEST_CASE(MustIgnoreFutureIfLost)
-{
-    promise<int> p;
-    {
-        future<int> f(p);
-    }
-    BOOST_CHECK_NO_THROW(p.set_success(10));
+BOOST_AUTO_TEST_CASE(MustThrowOnWaitWhenNotValid) {
+    future<std::string> f;
+    BOOST_CHECK_THROW(f.wait(), bad_future);
 }
 
-BOOST_AUTO_TEST_CASE(MustInvokeListenersOnCompletion)
-{
-    promise<int> p;
-    future<int> f(p);
-    auto result = make_none<attempt<int>>();
-
-    f.add_listener([&result](const attempt<int>& r) { result = r; });
-
-    p.set_success(10);
-    BOOST_CHECK_EQUAL(10, result.get().get());
+BOOST_AUTO_TEST_CASE(MustThrowOnWaitForWhenNotValid) {
+    future<std::string> f;
+    BOOST_CHECK_THROW(f.wait_for(std::chrono::seconds(1)), bad_future);
 }
 
-BOOST_AUTO_TEST_CASE(MustInvokeNewListenersAfterCompletion)
-{
-    promise<int> p;
-    future<int> f(p);
-    p.set_success(10);
-    auto result = make_none<attempt<int>>();
-
-    f.add_listener([&result](const attempt<int>& r) { result = r; });
-
-    BOOST_CHECK_EQUAL(10, result.get().get());
+BOOST_AUTO_TEST_CASE(MustBeIncompleteBeforePromiseIsSet) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    BOOST_CHECK(!f.is_completed());
 }
 
-BOOST_AUTO_TEST_CASE(MustPropagateSuccessWithMap)
-{
-    promise<int> p;
-    future<int> f1(p);
-    auto f2 = f1.map<int>([](const int& value) { return value * 2; });
-
-    p.set_success(10);
-    BOOST_CHECK_EQUAL(20, f2.get());
+BOOST_AUTO_TEST_CASE(MustBeCompletedAfterPromiseIsSet) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    p.set_value("Hello!");
+    BOOST_CHECK(f.is_completed());
 }
 
-BOOST_AUTO_TEST_CASE(MustPropagateFailureWithMap)
-{
-    promise<int> p;
-    future<int> f1(p);
-    auto f2 = f1.map<int>([](const int& value) { return value * 2; });
+BOOST_AUTO_TEST_CASE(MustGetWhenPromiseIsSet) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", f.get());
+}
 
-    p.set_failure(custom_exception("something went wrong"));
+BOOST_AUTO_TEST_CASE(MustWaitForWhenPromiseIsSet) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    p.set_value("Hello!");
+    BOOST_CHECK_NO_THROW(f.wait_for(std::chrono::seconds(1)));
+}
+
+BOOST_AUTO_TEST_CASE(MustThrowWaitForWhenPromiseIsNotSet) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    BOOST_CHECK_THROW(f.wait_for(std::chrono::milliseconds(25)), future_timeout);
+}
+
+BOOST_AUTO_TEST_CASE(MustInvalidateSourceAfterMoveConstruct) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = std::move(f1);
+    BOOST_CHECK(!f1.valid());
+    BOOST_CHECK(f2.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustInvalidateSourceAfterMoveAssign) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    future<std::string> f2;
+    f2 = std::move(f1);
+    BOOST_CHECK(!f1.valid());
+    BOOST_CHECK(f2.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustOperateNormallyAfterMoveConstruct) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = std::move(f1);
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustOperateNormallyAfterMoveAssign) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    future<std::string> f2;
+    f2 = std::move(f1);
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustSetValueFromVoidPromise) {
+    promise<void> p;
+    auto f = p.get_future();
+    p.set_value();
+    BOOST_CHECK_NO_THROW(f.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustSetExceptionFromVoidPromise) {
+    promise<void> p;
+    auto f = p.get_future();
+    p.set_failure(custom_exception("failure"));
+    BOOST_CHECK_THROW(f.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustBeInvalidAfterThen) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.then([](std::string s) { return s.length(); });
+    BOOST_CHECK(!f1.valid());
+    BOOST_CHECK(f2.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustBeInvalidAfterNext) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    BOOST_CHECK(!f1.valid());
+    BOOST_CHECK(f2.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustBeInvalidAfterFinally) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    util::attempt<std::string> result;
+    f.finally([&](util::attempt<std::string> r) {
+        result = std::move(r);
+    });
+    BOOST_CHECK(!f.valid());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnThen) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.then([](std::string s) { return s.length(); });
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL(6, f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnThenAfterResult) {
+    auto f1 = make_future_success<std::string>("Hello!");
+    auto f2 = f1.then([](std::string s) { return s.length(); });
+    BOOST_CHECK_EQUAL(6, f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnThenVoid) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.then([](std::string s) {});
+    p.set_value("Hello!");
+    BOOST_CHECK_NO_THROW(f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnNext) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL(6, f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnNextAfterResult) {
+    auto f1 = make_future_success<std::string>("Hello!");
+    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    BOOST_CHECK_EQUAL(6, f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustGetValueOnNextVoid) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<void>([](std::string s) { return make_future_success<void>(); });
+    p.set_value("Hello!");
+    BOOST_CHECK_NO_THROW(f2.get());
+}
+
+BOOST_AUTO_TEST_CASE(MustThrowFailureOnNext) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<std::size_t>([](std::string s) -> future<std::size_t> {
+        throw custom_exception("failed");
+    });
+    p.set_value("Hello!");
     BOOST_CHECK_THROW(f2.get(), custom_exception);
 }
 
-BOOST_AUTO_TEST_CASE(MustPropagateSuccessWithMapOnCompletedFuture)
-{
-    promise<int> p;
-    future<int> f1(p);
-
-    p.set_success(10);
-    auto f2 = f1.map<int>([](const int& value) { return value * 2; });
-
-    BOOST_CHECK_EQUAL(20, f2.get());
-}
-
-BOOST_AUTO_TEST_CASE(MustPropagateFailureWithMapOnCompletedFuture)
-{
-    promise<int> p;
-    future<int> f1(p);
-    p.set_failure(custom_exception("something went wrong"));
-    auto f2 = f1.map<int>([](const int& value) { return value * 2; });
-
+BOOST_AUTO_TEST_CASE(MustThrowFailureOnNextVoid) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<void>([](std::string s) -> future<void> {
+        throw custom_exception("failed");
+    });
+    p.set_value("Hello!");
     BOOST_CHECK_THROW(f2.get(), custom_exception);
 }
 
-BOOST_AUTO_TEST_CASE(MustPropagateSuccessWithFlatMap)
-{
-    promise<int> p;
-    future<int> f1(p);
-    auto f2 = f1.fmap<float>([](const int& value) { 
-        promise<float> p2;
-        future<float> f2(p2);
-        p2.set_success(value * 0.5f);
-        return f2;
+BOOST_AUTO_TEST_CASE(MustGetValueOnFinally) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    util::attempt<std::string> result;
+    f.finally([&](util::attempt<std::string> r) {
+        result = std::move(r);
     });
-
-    p.set_success(5);
-    BOOST_CHECK_EQUAL(2.5f, f2.get());
+    p.set_value("Hello!");
+    BOOST_CHECK_EQUAL("Hello!", result.get());
 }
 
-BOOST_AUTO_TEST_CASE(MustPropagateFailureWithFlatMap)
-{
-    promise<int> p;
-    future<int> f1(p);
-    auto f2 = f1.fmap<int>([](const int& value) { 
-        promise<int> p2;
-        future<int> f2(p2);
-        p2.set_success(value * 2);
-        return f2;
+BOOST_AUTO_TEST_CASE(MustGetValueOnFinallyAfterResult) {
+    promise<std::string> p;
+    auto f = p.get_future();
+    p.set_value("Hello!");
+    util::attempt<std::string> result;
+    f.finally([&](util::attempt<std::string> r) {
+        result = std::move(r);
     });
-
-    p.set_failure(custom_exception("guess what? failure!"));
-    BOOST_CHECK_THROW(f2.get(), custom_exception);
-}
-
-BOOST_AUTO_TEST_CASE(MustPropagateSuccessWithFlatMapOnCompletedFuture)
-{
-    promise<int> p;
-    future<int> f1(p);
-    p.set_success(10);
-    auto f2 = f1.fmap<int>([](const int& value) { 
-        promise<int> p2;
-        future<int> f2(p2);
-        p2.set_success(value * 2);
-        return f2;
-    });
-
-    BOOST_CHECK_EQUAL(20, f2.get());
-}
-
-BOOST_AUTO_TEST_CASE(MustPropagateFailureWithFlatMapOnCompletedFuture)
-{
-    promise<int> p;
-    future<int> f1(p);
-    p.set_failure(custom_exception("guess what? failure!"));
-    auto f2 = f1.fmap<int>([](const int& value) { 
-        promise<int> p2;
-        future<int> f2(p2);
-        p2.set_success(value * 2);
-        return f2;
-    });
-
-    BOOST_CHECK_THROW(f2.get(), custom_exception);
-}
-
-BOOST_AUTO_TEST_CASE(MustWaitForCompletion) {
-    promise<int> p;
-    future<int> f1(p);
-
-    std::thread t([&p]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        p.set_success(10);
-    });
-
-    f1.wait_completion(std::chrono::milliseconds(50));
-    BOOST_CHECK_EQUAL(10, f1.get());
-
-    t.join();
-}
-
-BOOST_AUTO_TEST_CASE(MustHonourWaitForCompletionTimeout) {
-    promise<int> p;
-    future<int> f1(p);
-
-    std::thread t([&p]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        p.set_success(10);
-    });
-
-    BOOST_CHECK_THROW(
-        f1.wait_completion(std::chrono::milliseconds(50)), 
-        future_timeout);
-
-    t.join();
-}
-
-BOOST_AUTO_TEST_CASE(MustWaitForResult) {
-    promise<int> p;
-    future<int> f1(p);
-
-    std::thread t([&p]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(25));
-        p.set_success(10);
-    });
-
-    BOOST_CHECK_EQUAL(10, f1.wait_result(std::chrono::milliseconds(50)));
-    t.join();
-}
-
-BOOST_AUTO_TEST_CASE(MustHonourWaitForResultTimeout) {
-    promise<int> p;
-    future<int> f1(p);
-
-    std::thread t([&p]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        p.set_success(10);
-    });
-
-    BOOST_CHECK_THROW(
-        f1.wait_result(std::chrono::milliseconds(50)),
-        future_timeout);
-    t.join();
+    BOOST_CHECK_EQUAL("Hello!", result.get());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

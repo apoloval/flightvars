@@ -33,7 +33,7 @@ public:
     future<tcp_connection> accept() {
         auto socket = std::make_shared<tcp::socket>(
             _acceptor.get_io_service());        
-        auto result = make_shared_promise<tcp_connection>();
+        auto result = std::make_shared<promise<tcp_connection>>();
         auto handler = std::bind(
             &tcp_server::accepted, 
             this, 
@@ -41,26 +41,26 @@ public:
             socket, 
             std::placeholders::_1);
         _acceptor.async_accept(*socket, handler);
-        return make_future(*result);
+        return result->get_future();
     }
 
 private:
 
-    mutable logger _log;
+    mutable util::logger _log;
     tcp::acceptor _acceptor;
 
-    void accepted(const shared_promise<tcp_connection>& promised,
+    void accepted(const std::shared_ptr<promise<tcp_connection>>& promised,
                   const shared_socket& socket, 
                   const boost::system::error_code& error) {
         if (!error) {
-            BOOST_LOG_SEV(_log, log_level::TRACE) << 
+            BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
                 "Accepted TCP connection from " << socket->remote_endpoint() << 
                 " to " << socket->local_endpoint();
-            promised->set_success(tcp_connection(socket));
+            promised->set_value(tcp_connection(socket));
         } else {
             auto msg = boost::format("Unexpected error while accepting TCP connections on %s") % 
                 _acceptor.local_endpoint();
-            BOOST_LOG_SEV(_log, log_level::ERROR) << msg;
+            BOOST_LOG_SEV(_log, util::log_level::ERROR) << msg;
             promised->set_failure(accept_error(boost::str(msg)));
         }
     }

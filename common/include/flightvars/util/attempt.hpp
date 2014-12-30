@@ -82,10 +82,26 @@ public:
         return is_success() ? make_some(_result.left()) : make_none<T>();
     }
 
-    /** Map this attempt into another type. */
+    /** Map this attempt into another non-void attempt. */
     template <class Func>
-    auto map(Func f) -> attempt<decltype(f(get()))> const {
+    typename std::enable_if<
+        !std::is_same<typename std::result_of<Func(T)>::type, void>::value,
+        attempt<typename std::result_of<Func(T)>::type>>::type
+    map(Func f) const {
         try { return make_success(f(get())); }
+        catch (...) { return make_failure<decltype(f(get()))>(std::current_exception()); }
+    }
+
+    /** Map this attempt into void attempt. */
+    template <class Func>
+    typename std::enable_if<
+        std::is_same<typename std::result_of<Func(T)>::type, void>::value,
+        attempt<void>>::type
+    map(Func f) const {
+        try {
+            f(get());
+            return make_success<void>();
+        }
         catch (...) { return make_failure<decltype(f(get()))>(std::current_exception()); }
     }
 
@@ -151,12 +167,28 @@ public:
         return is_success() ? make_some() : make_none<void>();
     }
 
-    /** Map this attempt into another type. */
+    /** Map this attempt into another non-void attempt. */
     template <class Func>
-    auto map(Func f) -> attempt<decltype(f())> const {
+    typename std::enable_if<
+        !std::is_same<typename std::result_of<Func()>::type, void>::value,
+        attempt<typename std::result_of<Func()>::type>>::type
+    map(Func f) const {
         try {
             throw_if_not_success();
             return make_success(f());
+        } catch (...) { return make_failure<decltype(f())>(std::current_exception()); }
+    }
+
+    /** Map this attempt into another void attempt. */
+    template <class Func>
+    typename std::enable_if<
+        std::is_same<typename std::result_of<Func()>::type, void>::value,
+        attempt<void>>::type
+    map(Func f) const {
+        try {
+            throw_if_not_success();
+            f();
+            return make_success<void>();
         } catch (...) { return make_failure<decltype(f())>(std::current_exception()); }
     }
 

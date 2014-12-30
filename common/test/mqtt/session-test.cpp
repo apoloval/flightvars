@@ -47,6 +47,7 @@ BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
     session->start();
     exec.run();
 
+    BOOST_REQUIRE(!!handled_request);
     BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request->header().msg_type);
 }
 
