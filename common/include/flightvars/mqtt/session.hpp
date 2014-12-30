@@ -86,15 +86,16 @@ private:
     }
 
     concurrent::future<shared_message> read_request(const io::shared_buffer& buff) {
-        using namespace std::placeholders;
-
-        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from " << *_conn;
-        return read_header(buff).next<shared_message>(
-            std::bind(&mqtt_session::read_message_from_header, self(), buff, _1));
+        return read_header(buff)
+            .next<shared_message>(std::bind(
+                &mqtt_session::read_message_from_header, self(), buff, std::placeholders::_1));
     }
 
     concurrent::future<void> write_response(const io::shared_buffer& buff,
                                             const shared_message& response) {
+        BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
+            "Replying to " << *_conn << " with message " << *response;
+        // TODO: actually write response
         return concurrent::make_future_success<void>();
     }
 
@@ -126,14 +127,16 @@ private:
         bool bytes_follow = (buff->last() & 0x80) && size_bytes < 4;
         if (bytes_follow) {
             BOOST_LOG_SEV(_log, util::log_level::TRACE) << 
-                "Fixed header is incomplete, some byte(s) follow; reading one more byte... ";
+                "Fixed header from " << *_conn <<
+                " is incomplete, some byte(s) follow; reading one more byte... ";
             buff->reset();
             buff->set_pos(size_bytes + 1);
             return _conn->read(buff, 1).next<fixed_header>(
                 std::bind(&mqtt_session::decode_header, self(), _1, size_bytes + 1));
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*buff);
-            BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Fixed header read: " << header;
+            BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
+                "Fixed header read from " << *_conn << ": " << header;
             return concurrent::make_future_success(std::move(header));
         }
     }
@@ -157,7 +160,8 @@ private:
                 "expected %d bytes of remaining length, but %d found", expected_len, actual_len));
         }
         auto msg = decode(header, *buff);
-        BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Request message decoded: " << *msg;
+        BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
+            "Request message decoded from " << *_conn << ": " << *msg;
         return msg;
     }
 };
