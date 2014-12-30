@@ -24,6 +24,11 @@ BOOST_AUTO_TEST_CASE(MustMakeFutureSuccess) {
     BOOST_CHECK_EQUAL("Hello!", f.get());
 }
 
+BOOST_AUTO_TEST_CASE(MustMakeFutureSuccessVoid) {
+    auto f = make_future_success<void>();
+    BOOST_CHECK_NO_THROW(f.get());
+}
+
 BOOST_AUTO_TEST_CASE(MustMakeFutureFailure) {
     auto f = make_future_failure<std::string>(custom_exception("failed"));
     BOOST_CHECK_THROW(f.get(), custom_exception);
@@ -164,6 +169,14 @@ BOOST_AUTO_TEST_CASE(MustGetValueOnThen) {
     BOOST_CHECK_EQUAL(6, f2.get());
 }
 
+BOOST_AUTO_TEST_CASE(MustGetValueOnThenVoid) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.then([](std::string s) {});
+    p.set_value("Hello!");
+    BOOST_CHECK_NO_THROW(f2.get());
+}
+
 BOOST_AUTO_TEST_CASE(MustGetValueOnNext) {
     promise<std::string> p;
     auto f1 = p.get_future();
@@ -172,10 +185,28 @@ BOOST_AUTO_TEST_CASE(MustGetValueOnNext) {
     BOOST_CHECK_EQUAL(6, f2.get());
 }
 
+BOOST_AUTO_TEST_CASE(MustGetValueOnNextVoid) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<void>([](std::string s) { return make_future_success<void>(); });
+    p.set_value("Hello!");
+    BOOST_CHECK_NO_THROW(f2.get());
+}
+
 BOOST_AUTO_TEST_CASE(MustThrowFailureOnNext) {
     promise<std::string> p;
     auto f1 = p.get_future();
     auto f2 = f1.next<std::size_t>([](std::string s) -> future<std::size_t> {
+        throw custom_exception("failed");
+    });
+    p.set_value("Hello!");
+    BOOST_CHECK_THROW(f2.get(), custom_exception);
+}
+
+BOOST_AUTO_TEST_CASE(MustThrowFailureOnNextVoid) {
+    promise<std::string> p;
+    auto f1 = p.get_future();
+    auto f2 = f1.next<void>([](std::string s) -> future<void> {
         throw custom_exception("failed");
     });
     p.set_value("Hello!");

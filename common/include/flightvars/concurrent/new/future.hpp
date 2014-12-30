@@ -99,8 +99,8 @@ public:
         using U = typename std::result_of<Func(T)>::type;
         auto p = std::make_shared<promise<U>>();
         set_push_handler([p, func](util::attempt<T> result) mutable {
-            try { p->set_value(func(result.extract())); }
-            catch (...) { p->set_exception(std::current_exception()); }
+            auto mapped = result.map(func);
+            p->set(std::move(mapped));
         }, exec);
         reset_state();
         return p->get_future();
@@ -113,8 +113,7 @@ public:
             try {
                 auto f = func(result.extract());
                 f.finally([p, exec](util::attempt<U> other_result) {
-                    try { p->set_value(other_result.extract()); }
-                    catch (...) { p->set_exception(std::current_exception()); }
+                    p->set(std::move(other_result));
                 }, exec);
             }
             catch (...) { p->set_exception(std::current_exception()); }
@@ -183,10 +182,20 @@ private:
 };
 
 template <class T>
-future<T> make_future_success(T&& value) {
+typename std::enable_if<!std::is_void<T>::value, future<T>>::type
+make_future_success(T&& value) {
     promise<T> p;
     auto f = p.get_future();
     p.set_value(value);
+    return f;
+}
+
+template <class T>
+typename std::enable_if<std::is_void<T>::value, future<T>>::type
+make_future_success() {
+    promise<T> p;
+    auto f = p.get_future();
+    p.set_value();
     return f;
 }
 
