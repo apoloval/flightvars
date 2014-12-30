@@ -22,14 +22,14 @@ public:
 
     using shared_ptr = std::shared_ptr<mock_connection>;    
 
-    concurrent::future<io::shared_buffer> read(const io::shared_buffer& buff, std::size_t bytes) {
+    concurrent::future<std::size_t> read(const io::shared_buffer& buff, std::size_t bytes) {
         if (_read_buffer.remaining() == 0) {
-            return concurrent::make_future_failure<io::shared_buffer>(
+            return concurrent::make_future_failure<std::size_t>(
                 mock_connection_closed("mock connection is closed"));
         }
         BOOST_CHECK_EQUAL(bytes, buff->write(_read_buffer, bytes));
         _read_buffer.inc_pos(bytes);
-        return concurrent::make_future_success<io::shared_buffer>(buff);
+        return concurrent::make_future_success<std::size_t>(bytes);
     }
 
     void prepare_read_message(const message& msg) {

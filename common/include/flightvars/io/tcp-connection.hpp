@@ -43,8 +43,8 @@ public:
                 _socket->local_endpoint() % _socket->remote_endpoint());
     }
 
-    future<shared_buffer> read(const shared_buffer& buff, std::size_t bytes) {
-        auto p = std::make_shared<promise<shared_buffer>>();
+    future<std::size_t> read(const shared_buffer& buff, std::size_t bytes) {
+        auto p = std::make_shared<promise<std::size_t>>();
         auto handler = std::bind(
             &tcp_connection::handle_read, 
             this, 
@@ -57,8 +57,8 @@ public:
         return p->get_future();
     }
 
-    future<shared_const_buffer> write(const shared_const_buffer& buff, std::size_t bytes) {
-        auto p = std::make_shared<promise<shared_const_buffer>>();
+    future<std::size_t> write(const shared_const_buffer& buff, std::size_t bytes) {
+        auto p = std::make_shared<promise<std::size_t>>();
         auto handler = std::bind(
             &tcp_connection::handle_write, 
             this, 
@@ -77,12 +77,12 @@ private:
     shared_socket _socket;
 
     void handle_read(const shared_buffer& buff,
-                     const std::shared_ptr<promise<shared_buffer>>& promise,
+                     const std::shared_ptr<promise<std::size_t>>& promise,
                      const boost::system::error_code& error,
                      std::size_t bytes_transferred) {
         buff->inc_pos(bytes_transferred);
         if (!error) {
-            promise->set_value(buff);
+            promise->set_value(bytes_transferred);
         } else {
             auto msg = boost::format("Unexpected error while reading from %s: %s") % 
                 str() % error;
@@ -92,12 +92,12 @@ private:
     }
 
     void handle_write(const shared_const_buffer& buff,
-                      const std::shared_ptr<promise<shared_const_buffer>>& promise,
+                      const std::shared_ptr<promise<std::size_t>>& promise,
                       const boost::system::error_code& error,
                       std::size_t bytes_transferred) {
         buff->inc_pos(bytes_transferred);
         if (!error) {
-            promise->set_value(buff);
+            promise->set_value(bytes_transferred);
         } else {
             auto msg = boost::format("Unexpected error while writing to %s: %s") % 
                 str() % error;

@@ -116,11 +116,13 @@ private:
         using namespace std::placeholders;
 
         return _conn->read(buff, fixed_header::BASE_LEN)
-            .next<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, 1));
+            .next<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, buff, 1));
     }
 
     concurrent::future<fixed_header>
-    decode_header(const io::shared_buffer& buff, std::size_t size_bytes) {
+    decode_header(std::size_t bytes_read,
+                  const io::shared_buffer& buff,
+                  std::size_t size_bytes) {
         using namespace std::placeholders;
 
         buff->flip();
@@ -132,7 +134,7 @@ private:
             buff->reset();
             buff->set_pos(size_bytes + 1);
             return _conn->read(buff, 1).next<fixed_header>(
-                std::bind(&mqtt_session::decode_header, self(), _1, size_bytes + 1));
+                std::bind(&mqtt_session::decode_header, self(), _1, buff, size_bytes + 1));
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*buff);
             BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
@@ -147,10 +149,12 @@ private:
 
         buff->reset();
         return _conn->read(buff, header.len)
-            .then(std::bind(&mqtt_session::decode_content, self(), header, _1));
+            .then(std::bind(&mqtt_session::decode_content, self(), header, buff, _1));
     }
 
-    shared_message decode_content(const fixed_header& header, const io::shared_buffer& buff) {
+    shared_message decode_content(const fixed_header& header,
+                                  const io::shared_buffer& buff,
+                                  std::size_t bytes_read) {
         buff->flip();
         auto expected_len = header.len;
         auto actual_len = buff->remaining();
