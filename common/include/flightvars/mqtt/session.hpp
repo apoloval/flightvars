@@ -80,16 +80,16 @@ private:
         BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
             "Expecting new request for session on " << *_conn;
         read_request(buff)
-            .fmap<shared_message>(_msg_handler, _exec)
-            .fmap<void>(std::bind(&mqtt_session::write_response, self(), buff, _1), _exec)
-            .add_listener(std::bind(&mqtt_session::request_processed, self(), buff, _1), _exec);
+            .next<shared_message>(_msg_handler, _exec)
+            .next<void>(std::bind(&mqtt_session::write_response, self(), buff, _1), _exec)
+            .finally(std::bind(&mqtt_session::request_processed, self(), buff, _1), _exec);
     }
 
     concurrent::future<shared_message> read_request(const io::shared_buffer& buff) {
         using namespace std::placeholders;
 
         BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Receiving a new message from " << *_conn;
-        return read_header(buff).fmap<shared_message>(
+        return read_header(buff).next<shared_message>(
             std::bind(&mqtt_session::read_message_from_header, self(), buff, _1));
     }
 
@@ -115,7 +115,7 @@ private:
         using namespace std::placeholders;
 
         return _conn->read(buff, fixed_header::BASE_LEN)
-            .fmap<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, 1));
+            .next<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, 1));
     }
 
     concurrent::future<fixed_header>
@@ -129,12 +129,12 @@ private:
                 "Fixed header is incomplete, some byte(s) follow; reading one more byte... ";
             buff->reset();
             buff->set_pos(size_bytes + 1);
-            return _conn->read(buff, 1).fmap<fixed_header>(
+            return _conn->read(buff, 1).next<fixed_header>(
                 std::bind(&mqtt_session::decode_header, self(), _1, size_bytes + 1));
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*buff);
             BOOST_LOG_SEV(_log, util::log_level::TRACE) << "Fixed header read: " << header;
-            return concurrent::make_future_success(header);
+            return concurrent::make_future_success(std::move(header));
         }
     }
 
@@ -144,7 +144,7 @@ private:
 
         buff->reset();
         return _conn->read(buff, header.len)
-            .map<shared_message>(std::bind(&mqtt_session::decode_content, self(), header, _1));
+            .then(std::bind(&mqtt_session::decode_content, self(), header, _1));
     }
 
     shared_message decode_content(const fixed_header& header, const io::shared_buffer& buff) {

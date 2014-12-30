@@ -29,7 +29,7 @@ public:
         }
         BOOST_CHECK_EQUAL(bytes, buff->write(_read_buffer, bytes));
         _read_buffer.inc_pos(bytes);
-        return concurrent::make_future_success(buff);
+        return concurrent::make_future_success<io::shared_buffer>(buff);
     }
 
     void prepare_read_message(const message& msg) {

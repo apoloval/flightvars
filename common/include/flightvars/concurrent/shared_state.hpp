@@ -16,7 +16,7 @@
 #include <flightvars/util/exception.hpp>
 #include <flightvars/util/option.hpp>
 
-namespace flightvars { namespace concurrent { namespace newwave {
+namespace flightvars { namespace concurrent {
 
 FV_DECL_EXCEPTION(bad_shared_state);
 
@@ -111,6 +111,6 @@ private:
     }
 };
 
-}}}
+}}
 
 #endif

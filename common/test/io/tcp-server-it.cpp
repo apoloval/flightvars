@@ -30,7 +30,7 @@ struct server_session : std::enable_shared_from_this<server_session> {
         auto input_buffer = make_shared_buffer(3);
         auto self = shared_from_this();
         return read_remaining(conn, input_buffer)
-            .fmap<shared_const_buffer>([self](const shared_buffer& buff) {
+            .next<shared_const_buffer>([self](const shared_buffer& buff) {
                 buff->flip();
                 BOOST_CHECK_EQUAL("APV", buff->safe_read_string(3));
 
@@ -42,7 +42,7 @@ struct server_session : std::enable_shared_from_this<server_session> {
                 output->flip();
                 return write_remaining(self->conn, output);
             })
-            .map<void>([self](const shared_const_buffer&) {
+            .then([self](const shared_const_buffer&) {
                 // Let the connection die (and close)
             });
     }
@@ -61,12 +61,12 @@ struct client_session : std::enable_shared_from_this<client_session> {
         msg->flip();
         auto self = shared_from_this();
         return write_remaining(conn, msg)
-            .fmap<shared_buffer>([self](const shared_const_buffer& buff) {
+            .next<shared_buffer>([self](const shared_const_buffer& buff) {
                 buff->set_pos(0);
                 auto reply = make_shared_buffer(10);
                 return read_remaining(self->conn, reply); 
             })
-            .map<void>([self](const shared_buffer& buff) {
+            .then([self](const shared_buffer& buff) {
                 buff->flip();
                 BOOST_CHECK_EQUAL("Hello APV\n", buff->safe_read_string(10));
             });
@@ -78,58 +78,58 @@ BOOST_AUTO_TEST_CASE(MustCommunicateClientAndServer)
     concurrent::asio_service_executor exec;
     tcp_server server(5005, exec);
     server.accept()
-        .map<server_session::shared_ptr>([](const tcp_connection& conn) {
+        .then([](const tcp_connection& conn) {
             return std::make_shared<server_session>(conn);
         })
-        .fmap<void>([](const server_session::shared_ptr& session) {
+        .next<void>([](const server_session::shared_ptr& session) {
             return session->process();
         });
     auto result = tcp_connect("localhost", 5005, exec)
-        .map<client_session::shared_ptr>([](const tcp_connection& conn) {
+        .then([](const tcp_connection& conn) {
             return std::make_shared<client_session>(conn);
         })
-        .fmap<void>([](const client_session::shared_ptr& session) {
+        .next<void>([](const client_session::shared_ptr& session) {
             return session->process();
         })
-        .map<void>([exec]() mutable {
+        .then([exec]() mutable {
             exec.stop();
         });
     exec.run();
-    BOOST_CHECK_NO_THROW(result.wait_result(std::chrono::milliseconds(50)));
+    BOOST_CHECK_NO_THROW(result.wait_for(std::chrono::milliseconds(50)));
 }
 
 BOOST_AUTO_TEST_CASE(MustFailToConnectWhenServerIsNotListening)
 {
     concurrent::asio_service_executor exec;
     auto result = tcp_connect("localhost", 5005, exec)
-        .map<client_session::shared_ptr>([](const tcp_connection& conn) {
+        .then([](const tcp_connection& conn) {
             return std::make_shared<client_session>(conn);
         })
-        .fmap<void>([](const client_session::shared_ptr& session) {
+        .next<void>([](const client_session::shared_ptr& session) {
             return session->process();
         })
-        .map<void>([exec]() mutable {
+        .then([exec]() mutable {
             exec.stop();
         });
     exec.run();
-    BOOST_CHECK_THROW(result.wait_result(std::chrono::milliseconds(50)), connect_error);
+    BOOST_CHECK_THROW(result.get_for(std::chrono::milliseconds(50)), connect_error);
 }
 
 BOOST_AUTO_TEST_CASE(MustFailToConnectWhenServerHostIsUnknown)
 {
     concurrent::asio_service_executor exec;
     auto result = tcp_connect("abcdefghijklmnopqrstuvwxyz", 5005, exec)
-        .map<client_session::shared_ptr>([](const tcp_connection& conn) {
+        .then([](const tcp_connection& conn) {
             return std::make_shared<client_session>(conn);
         })
-        .fmap<void>([](const client_session::shared_ptr& session) {
+        .next<void>([](const client_session::shared_ptr& session) {
             return session->process();
         })
-        .map<void>([exec]() mutable {
+        .then([exec]() mutable {
             exec.stop();
         });
     exec.run();
-    BOOST_CHECK_THROW(result.wait_result(std::chrono::milliseconds(50)), resolve_error);
+    BOOST_CHECK_THROW(result.get_for(std::chrono::milliseconds(50)), resolve_error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

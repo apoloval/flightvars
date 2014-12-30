@@ -9,10 +9,10 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <flightvars/concurrent/new/shared_state.hpp>
+#include <flightvars/concurrent/shared_state.hpp>
 
 using namespace flightvars;
-using namespace flightvars::concurrent::newwave;
+using namespace flightvars::concurrent;
 
 BOOST_AUTO_TEST_SUITE(ConcurrentSharedState)
 
