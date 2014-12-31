@@ -28,15 +28,15 @@ struct is_connection {
 };
 
 template <class Connection>
-concurrent::future<shared_buffer>
-read_remaining(Connection& conn, const shared_buffer& buff) {
-    return conn.read(buff, buff->remaining());
+concurrent::future<std::size_t>
+read_remaining(Connection& conn, buffer& buff) {
+    return conn.read(buff, buff.remaining());
 }
 
 template <class Connection>
-concurrent::future<shared_const_buffer>
-write_remaining(Connection& conn, const shared_const_buffer& buff) {
-    return conn.write(buff, buff->remaining());
+concurrent::future<std::size_t>
+write_remaining(Connection& conn, buffer& buff) {
+    return conn.write(buff, buff.remaining());
 } 
 
 }}

@@ -226,21 +226,6 @@ inline std::ostream& operator << (std::ostream& s, const buffer& buff) {
     return s;
 }
 
-using shared_buffer = std::shared_ptr<buffer>;
-using shared_const_buffer = std::shared_ptr<const buffer>;
-
-inline shared_buffer make_shared_buffer(
-        std::size_t size = FLIGHTVARS_DEFAULT_BUFFER_SIZE) {
-    return std::make_shared<buffer>(size);
-}
-
-inline shared_buffer make_shared_buffer(
-        const std::string& data) {
-    auto buff = std::make_shared<buffer>(data.length());
-    buff->write(data.c_str(), data.length());
-    return buff;
-}
-
 }}
 
 #endif

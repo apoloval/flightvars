@@ -23,26 +23,26 @@ struct server_session : std::enable_shared_from_this<server_session> {
     using shared_ptr = std::shared_ptr<server_session>;
 
     tcp_connection conn;
+    buffer input_buffer;
+    buffer output_buffer;
 
     server_session(const tcp_connection& c) : conn(c) {}
 
     future<void> process() {
-        auto input_buffer = make_shared_buffer(3);
         auto self = shared_from_this();
-        return read_remaining(conn, input_buffer)
-            .next<shared_const_buffer>([self](const shared_buffer& buff) {
-                buff->flip();
-                BOOST_CHECK_EQUAL("APV", buff->safe_read_string(3));
+        return conn.read(input_buffer, 3)
+            .next<std::size_t>([self](std::size_t) {
+                self->input_buffer.flip();
+                BOOST_CHECK_EQUAL("APV", self->input_buffer.safe_read_string(3));
 
-                buff->flip();
-                auto output = make_shared_buffer(64);
-                output->write("Hello ");
-                output->write(*buff);
-                output->write("\n");
-                output->flip();
-                return write_remaining(self->conn, output);
+                self->input_buffer.flip();
+                self->output_buffer.write("Hello ");
+                self->output_buffer.write(self->input_buffer);
+                self->output_buffer.write("\n");
+                self->output_buffer.flip();
+                return write_remaining(self->conn, self->output_buffer);
             })
-            .then([self](const shared_const_buffer&) {
+            .then([self](std::size_t) {
                 // Let the connection die (and close)
             });
     }
@@ -53,22 +53,23 @@ struct client_session : std::enable_shared_from_this<client_session> {
     using shared_ptr = std::shared_ptr<client_session>;
 
     tcp_connection conn;
+    buffer input_buffer;
+    buffer output_buffer;
 
     client_session(const tcp_connection& c) : conn(c) {}
 
     future<void> process() {
-        auto msg = make_shared_buffer("APV");
-        msg->flip();
+        output_buffer.write("APV");
+        output_buffer.flip();
         auto self = shared_from_this();
-        return write_remaining(conn, msg)
-            .next<shared_buffer>([self](const shared_const_buffer& buff) {
-                buff->set_pos(0);
-                auto reply = make_shared_buffer(10);
-                return read_remaining(self->conn, reply); 
+        return write_remaining(conn, output_buffer)
+            .next<std::size_t>([self](std::size_t) {
+                self->output_buffer.set_pos(0);
+                return self->conn.read(self->input_buffer, 10);
             })
-            .then([self](const shared_buffer& buff) {
-                buff->flip();
-                BOOST_CHECK_EQUAL("Hello APV\n", buff->safe_read_string(10));
+            .then([self](std::size_t) {
+                self->input_buffer.flip();
+                BOOST_CHECK_EQUAL("Hello APV\n", self->input_buffer.safe_read_string(10));
             });
     }
 };
@@ -77,7 +78,7 @@ BOOST_AUTO_TEST_CASE(MustCommunicateClientAndServer)
 {
     concurrent::asio_service_executor exec;
     tcp_server server(5005, exec);
-    server.accept()
+    auto srv = server.accept()
         .then([](const tcp_connection& conn) {
             return std::make_shared<server_session>(conn);
         })
