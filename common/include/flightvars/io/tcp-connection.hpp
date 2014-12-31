@@ -43,31 +43,31 @@ public:
                 _socket->local_endpoint() % _socket->remote_endpoint());
     }
 
-    future<std::size_t> read(const shared_buffer& buff, std::size_t bytes) {
+    future<std::size_t> read(buffer& buff, std::size_t bytes) {
         auto p = std::make_shared<promise<std::size_t>>();
         auto handler = std::bind(
             &tcp_connection::handle_read, 
             this, 
-            buff,
+            std::ref(buff),
             p,
             std::placeholders::_1, 
             std::placeholders::_2);
         boost::asio::async_read(
-            *_socket, boost::asio::buffer(buff->to_boost_asio(bytes)), handler);
+            *_socket, boost::asio::buffer(buff.to_boost_asio(bytes)), handler);
         return p->get_future();
     }
 
-    future<std::size_t> write(const shared_const_buffer& buff, std::size_t bytes) {
+    future<std::size_t> write(buffer& buff, std::size_t bytes) {
         auto p = std::make_shared<promise<std::size_t>>();
         auto handler = std::bind(
             &tcp_connection::handle_write, 
             this, 
-            buff,
+            std::ref(buff),
             p,
             std::placeholders::_1, 
             std::placeholders::_2);
         boost::asio::async_write(
-            *_socket, boost::asio::buffer(buff->to_boost_asio(bytes)), handler);
+            *_socket, boost::asio::buffer(buff.to_boost_asio(bytes)), handler);
         return p->get_future();
     } 
 
@@ -76,11 +76,11 @@ private:
     mutable util::logger _log;
     shared_socket _socket;
 
-    void handle_read(const shared_buffer& buff,
+    void handle_read(const std::reference_wrapper<buffer>& buff,
                      const std::shared_ptr<promise<std::size_t>>& promise,
                      const boost::system::error_code& error,
                      std::size_t bytes_transferred) {
-        buff->inc_pos(bytes_transferred);
+        buff.get().inc_pos(bytes_transferred);
         if (!error) {
             promise->set_value(bytes_transferred);
         } else {
@@ -91,11 +91,11 @@ private:
         }
     }
 
-    void handle_write(const shared_const_buffer& buff,
+    void handle_write(const std::reference_wrapper<buffer>& buff,
                       const std::shared_ptr<promise<std::size_t>>& promise,
                       const boost::system::error_code& error,
                       std::size_t bytes_transferred) {
-        buff->inc_pos(bytes_transferred);
+        buff.get().inc_pos(bytes_transferred);
         if (!error) {
             promise->set_value(bytes_transferred);
         } else {

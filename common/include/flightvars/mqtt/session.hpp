@@ -115,7 +115,7 @@ private:
     read_header() {
         using namespace std::placeholders;
 
-        return _conn->read(_input_buff, fixed_header::BASE_LEN)
+        return _conn->read(*_input_buff, fixed_header::BASE_LEN)
             .next<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, 1));
     }
 
@@ -132,7 +132,7 @@ private:
                 " is incomplete, some byte(s) follow; reading one more byte... ";
             _input_buff->reset();
             _input_buff->set_pos(size_bytes + 1);
-            return _conn->read(_input_buff, 1).next<fixed_header>(
+            return _conn->read(*_input_buff, 1).next<fixed_header>(
                 std::bind(&mqtt_session::decode_header, self(), _1, size_bytes + 1));
         } else {
             auto header = codecs::decoder<fixed_header>::decode(*_input_buff);
@@ -147,7 +147,7 @@ private:
         using namespace std::placeholders;
 
         _input_buff->reset();
-        return _conn->read(_input_buff, header.len)
+        return _conn->read(*_input_buff, header.len)
             .then(std::bind(&mqtt_session::decode_content, self(), header, _1));
     }
 
