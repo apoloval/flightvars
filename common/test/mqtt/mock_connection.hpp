@@ -41,6 +41,7 @@ public:
     void prepare_read_message(const message& msg) {
         _read_buffer.reset();
         encode(msg, _read_buffer);
+        _read_buffer.flip();
     }
 
 private:

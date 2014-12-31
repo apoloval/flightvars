@@ -20,7 +20,7 @@ namespace flightvars { namespace mqtt {
 /**
  * Encode a MQTT message into the given buffer.
  *
- * The buffer is flipped after encoded bytes are transferred.
+ * The buffer must be flipped after encoded bytes are transferred in order to consume them.
  */
 void encode(const message& msg, io::buffer& buff) {
     auto header = msg.header();
@@ -36,7 +36,6 @@ void encode(const message& msg, io::buffer& buff) {
             throw std::runtime_error(util::format("cannot encode message of unknown type %s",
                 message_type_str(header.msg_type)));
     }
-    buff.flip();
 }
 
 /**
