@@ -66,6 +66,7 @@ private:
     std::function<concurrent::future<shared_message>(const shared_message&)> _msg_handler;
     Executor _exec;
     io::buffer _input_buff;
+    io::buffer _output_buff;
 
     template <class MessageHandler>
     mqtt_session(const typename Connection::shared_ptr& conn, 
@@ -86,16 +87,20 @@ private:
     }
 
     concurrent::future<shared_message> read_request() {
+        _input_buff.reset();
         return read_header()
             .next<shared_message>(std::bind(
                 &mqtt_session::read_message_from_header, self(), std::placeholders::_1));
     }
 
     concurrent::future<void> write_response(const shared_message& response) {
+        _output_buff.reset();
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
-            "Replying to " << *_conn << " with message " << *response;
-        // TODO: actually write response
-        return concurrent::make_future_success<void>();
+            "Response message encoded to " << *_conn << ": " << *response;
+        encode(*response, _output_buff);
+        _output_buff.flip();
+        return io::write_remaining(*_conn, _output_buff)
+            .then([](std::size_t) {});
     }
 
     void request_processed(const util::attempt<void>& result) {

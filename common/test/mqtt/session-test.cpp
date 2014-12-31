@@ -26,16 +26,20 @@ make_session(const mock_connection::shared_ptr& conn,
     return make_mqtt_session<mock_connection>(conn, handler, exec);
 }
 
-BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
-    auto conn = make_mock_connection();
-    concurrent::asio_service_executor exec;
-    auto req_msg = make_connect(
+shared_message make_sample_request() {
+    return make_connect(
         "cli0", // client ID
         util::make_some<connect_credentials>({ "john.williams", "leia" }),
         util::make_some<connect_will>({ "mytopic", "mymessage", qos_level::QOS_0, false }),
         30,     // keep alive
         false   // clean session
     );
+}
+
+BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
+    auto conn = make_mock_connection();
+    concurrent::asio_service_executor exec;
+    auto req_msg = make_sample_request();
     conn->prepare_read_message(*req_msg);
     shared_message handled_request;
 
@@ -47,8 +51,32 @@ BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
     session->start();
     exec.run();
 
+    auto response = conn->written_message();
+
     BOOST_REQUIRE(!!handled_request);
     BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request->header().msg_type);
+    BOOST_CHECK_EQUAL(message_type::CONNACK, response->header().msg_type);
+}
+
+BOOST_AUTO_TEST_CASE(MustProcessManyRequestsAndResponsesInSameSession) {
+    auto conn = make_mock_connection();
+    concurrent::asio_service_executor exec;
+    shared_message handled_request;
+    auto session = make_session(conn, [&](const shared_message& req_msg) {
+        handled_request = req_msg;
+        return concurrent::make_future_success(
+            make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
+    }, exec);
+    auto req_msg = make_sample_request();
+    conn->prepare_read_messages({ *req_msg, *req_msg, *req_msg });
+    session->start();
+    exec.run();
+
+    auto response = conn->written_message();
+
+    BOOST_REQUIRE(!!handled_request);
+    BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request->header().msg_type);
+    BOOST_CHECK_EQUAL(message_type::CONNACK, response->header().msg_type);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

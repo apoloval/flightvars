@@ -44,6 +44,21 @@ public:
         _read_buffer.flip();
     }
 
+    void prepare_read_messages(std::initializer_list<message> messages) {
+        _read_buffer.reset();
+        std::for_each(messages.begin(), messages.end(), [this](const message& msg) {
+            encode(msg, _read_buffer);
+        });
+        _read_buffer.flip();
+    }
+
+    shared_message written_message() {
+        _write_buffer.flip();
+        auto header = codecs::decoder<fixed_header>::decode(_write_buffer);
+        _write_buffer.reset();
+        return decode(header, _write_buffer);
+    }
+
 private:
 
     io::buffer _read_buffer;
