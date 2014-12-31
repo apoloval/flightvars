@@ -56,7 +56,6 @@ public:
     void start() {
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
             "Initializing a new MQTT session on " << *_conn;
-        _input_buff = io::make_shared_buffer();
         concurrent::run(_exec, &mqtt_session::process_request, self());
     }
 
@@ -66,7 +65,7 @@ private:
     typename Connection::shared_ptr _conn;
     std::function<concurrent::future<shared_message>(const shared_message&)> _msg_handler;
     Executor _exec;
-    io::shared_buffer _input_buff;
+    io::buffer _input_buff;
 
     template <class MessageHandler>
     mqtt_session(const typename Connection::shared_ptr& conn, 
@@ -115,7 +114,7 @@ private:
     read_header() {
         using namespace std::placeholders;
 
-        return _conn->read(*_input_buff, fixed_header::BASE_LEN)
+        return _conn->read(_input_buff, fixed_header::BASE_LEN)
             .next<fixed_header>(std::bind(&mqtt_session::decode_header, self(), _1, 1));
     }
 
@@ -124,18 +123,18 @@ private:
                   std::size_t size_bytes) {
         using namespace std::placeholders;
 
-        _input_buff->flip();
-        bool bytes_follow = (_input_buff->last() & 0x80) && size_bytes < 4;
+        _input_buff.flip();
+        bool bytes_follow = (_input_buff.last() & 0x80) && size_bytes < 4;
         if (bytes_follow) {
             BOOST_LOG_SEV(_log, util::log_level::TRACE) << 
                 "Fixed header from " << *_conn <<
                 " is incomplete, some byte(s) follow; reading one more byte... ";
-            _input_buff->reset();
-            _input_buff->set_pos(size_bytes + 1);
-            return _conn->read(*_input_buff, 1).next<fixed_header>(
+            _input_buff.reset();
+            _input_buff.set_pos(size_bytes + 1);
+            return _conn->read(_input_buff, 1).next<fixed_header>(
                 std::bind(&mqtt_session::decode_header, self(), _1, size_bytes + 1));
         } else {
-            auto header = codecs::decoder<fixed_header>::decode(*_input_buff);
+            auto header = codecs::decoder<fixed_header>::decode(_input_buff);
             BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
                 "Fixed header read from " << *_conn << ": " << header;
             return concurrent::make_future_success(std::move(header));
@@ -146,22 +145,22 @@ private:
     read_message_from_header(const fixed_header& header) {
         using namespace std::placeholders;
 
-        _input_buff->reset();
-        return _conn->read(*_input_buff, header.len)
+        _input_buff.reset();
+        return _conn->read(_input_buff, header.len)
             .then(std::bind(&mqtt_session::decode_content, self(), header, _1));
     }
 
     shared_message decode_content(const fixed_header& header,
                                   std::size_t bytes_read) {
-        _input_buff->flip();
+        _input_buff.flip();
         auto expected_len = header.len;
-        auto actual_len = _input_buff->remaining();
+        auto actual_len = _input_buff.remaining();
         if (actual_len != expected_len) {
             throw session_error(util::format(
                 "cannot process MQTT message content: "
                 "expected %d bytes of remaining length, but %d found", expected_len, actual_len));
         }
-        auto msg = decode(header, *_input_buff);
+        auto msg = decode(header, _input_buff);
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
             "Request message decoded from " << *_conn << ": " << *msg;
         return msg;
