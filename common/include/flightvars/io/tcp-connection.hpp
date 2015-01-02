@@ -107,7 +107,10 @@ private:
     }
 };
 
-using shared_tcp_connection = std::shared_ptr<tcp_connection>;
+template <>
+struct is_connection<tcp_connection> {
+    static constexpr bool value = true;
+};
 
 inline std::ostream& operator << (std::ostream& s, const tcp_connection& conn) {
     s << conn.str();

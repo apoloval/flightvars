@@ -45,6 +45,9 @@ template <class Connection, class Executor>
 class mqtt_session : public std::enable_shared_from_this<mqtt_session<Connection, Executor>> {
 public:
 
+    static_assert(io::is_connection<Connection>::value,
+        "Connection template argument must be a connection");
+
     using shared_ptr = std::shared_ptr<mqtt_session>;
 
     template <class C, class MessageHandler, class E>

@@ -76,4 +76,9 @@ mock_connection::shared_ptr make_mock_connection() {
 
 }}
 
+template <>
+struct flightvars::io::is_connection<flightvars::mqtt::mock_connection> {
+    static constexpr bool value = true;
+};
+
 #endif
