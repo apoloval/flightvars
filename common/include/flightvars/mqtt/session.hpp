@@ -48,6 +48,9 @@ public:
     static_assert(io::is_connection<Connection>::value,
         "Connection template argument must be a connection");
 
+    static_assert(concurrent::is_executor<Executor>::value,
+        "Executor template argument must be an executor");
+
     using shared_ptr = std::shared_ptr<mqtt_session>;
 
     template <class C, class MessageHandler, class E>

@@ -16,6 +16,26 @@
 
 namespace flightvars { namespace concurrent {
 
+/**
+ * An type trait that determines whether a given type T is a concurrent executor.
+ *
+ * Any type that claims to be a executor must fit the following requirements:
+ *
+ *  - It must provide a `execute()` template function with the following signature:
+ *
+ *      template <class Task>
+ *      void execute(Task task)
+ *
+ *    This function would execute the given task in the context represented by the given executor.
+ *    The `Task` type must be invocable with the signature `void(void)`. Any exception thrown by
+ *    the task should be treated by the executor according to its nature.
+ *
+ */
+template <class T>
+struct is_executor {
+    static constexpr bool value = false;
+};
+
 /** An executor that runs all the tasks in the same thread that submits them. */
 class same_thread_executor {
 public:
@@ -26,6 +46,11 @@ public:
 
     template <class Task>
     void execute(Task task) { task(); }
+};
+
+template <>
+struct is_executor<same_thread_executor> {
+    static constexpr bool value = true;
 };
 
 /** An executor that wraps a Boost ASIO's `io_service` and uses it to execute tasks. */
@@ -48,6 +73,11 @@ public:
 private:
 
     std::shared_ptr<boost::asio::io_service> _service;
+};
+
+template <>
+struct is_executor<asio_service_executor> {
+    static constexpr bool value = true;
 };
 
 /** Run the given function with the given arguments using the given executor. */
