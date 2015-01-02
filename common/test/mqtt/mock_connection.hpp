@@ -10,6 +10,8 @@
 #ifndef FLIGHTVARS_IO_MOCK_CONNECTION_H
 #define FLIGHTVARS_IO_MOCK_CONNECTION_H
 
+#include <flightvars/concurrent/future.hpp>
+#include <flightvars/io/connection.hpp>
 #include <flightvars/mqtt/codecs.hpp>
 #include <flightvars/mqtt/messages.hpp>
 
@@ -65,12 +67,12 @@ private:
     io::buffer _write_buffer;
 };
 
-std::ostream& operator << (std::ostream& s, const mock_connection& conn) {
+inline std::ostream& operator << (std::ostream& s, const mock_connection& conn) {
     s << "mock connection";
     return s;
 }
 
-mock_connection::shared_ptr make_mock_connection() {
+inline mock_connection::shared_ptr make_mock_connection() {
     return std::make_shared<mock_connection>();
 }
 

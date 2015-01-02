@@ -22,7 +22,7 @@ namespace flightvars { namespace mqtt {
  *
  * The buffer must be flipped after encoded bytes are transferred in order to consume them.
  */
-void encode(const message& msg, io::buffer& buff) {
+inline void encode(const message& msg, io::buffer& buff) {
     auto header = msg.header();
     codecs::encoder<fixed_header>::encode(header, buff);
     switch (header.msg_type) {
@@ -43,7 +43,7 @@ void encode(const message& msg, io::buffer& buff) {
  *
  * The given buffer should be ready to extract the bytes corresponding to the message body.
  */
-shared_message decode(const fixed_header& header, io::buffer& buff) {
+inline shared_message decode(const fixed_header& header, io::buffer& buff) {
     switch (header.msg_type) {
         case message_type::CONNECT:
             return std::make_shared<message>(
