@@ -9,6 +9,7 @@ set(flightvars_HEADERS
    include/flightvars/concurrent/shared_state.hpp
    include/flightvars/io/buffer.hpp
    include/flightvars/io/connection.hpp
+   include/flightvars/io/server.hpp
    include/flightvars/io/tcp-connection.hpp
    include/flightvars/io/tcp-server.hpp
    include/flightvars/io/types.hpp

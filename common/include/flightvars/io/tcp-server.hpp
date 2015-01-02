@@ -16,6 +16,7 @@
 #include <boost/format.hpp>
 
 #include <flightvars/concurrent/executor.hpp>
+#include <flightvars/io/server.hpp>
 #include <flightvars/io/tcp-connection.hpp>
 #include <flightvars/io/types.hpp>
 #include <flightvars/util/logging.hpp>
@@ -27,10 +28,12 @@ public:
 
     FV_DECL_EXCEPTION(accept_error);
 
+    using connection_type = tcp_connection;
+
     tcp_server(int port, concurrent::asio_service_executor& exec) :
         _acceptor(exec.io_service(), endpoint(tcp::v4(), port)) {}
 
-    future<tcp_connection> accept() {
+    future<connection_type> accept() {
         auto socket = std::make_shared<tcp::socket>(
             _acceptor.get_io_service());        
         auto result = std::make_shared<promise<tcp_connection>>();
@@ -64,6 +67,11 @@ private:
             promised->set_failure(accept_error(boost::str(msg)));
         }
     }
+};
+
+template <>
+struct is_server<tcp_server> {
+    static constexpr bool value = true;
 };
 
 }}
