@@ -43,11 +43,7 @@ public:
 
     template <class U = T>
     typename std::enable_if<!std::is_void<U>::value>::type
-    set_value(const U& value) { set(util::make_success<T>(value)); }
-
-    template <class U = T>
-    typename std::enable_if<!std::is_void<U>::value>::type
-    set_value(U&& value) { set(util::make_success<T>(std::move(value))); }
+    set_value(U&& value) { set(util::make_success(T(std::forward<U>(value)))); }
 
     template <class U = T>
     typename std::enable_if<std::is_void<U>::value>::type

@@ -61,6 +61,7 @@ set(unittests_SOURCES
    test/mqtt/encoder/fixed-header-test.cpp
    test/mqtt/encoder/types-test.cpp
    test/mqtt/session-test.cpp
+   test/util/noncopyable.hpp
    test/util/attempt-test.cpp
    test/util/either-test.cpp
    test/util/format-test.cpp

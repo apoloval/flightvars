@@ -48,10 +48,9 @@ public:
     /** Create a new either object with right defined by move. */
     either(U&& right) : _left(nullptr), _right(new U(std::move(right))) {}
 
-    either(const either& other) {
-        _left.reset(other.has_left() ? new T(other.left()) : nullptr);
-        _right.reset(other.has_right() ? new U(other.right()) : nullptr);
-    }
+    either(const either& other) :
+        _left(other.has_left() ? new T(other.left()) : nullptr),
+        _right(other.has_right() ? new U(other.right()) : nullptr) {}
 
     either(either&& other) = default;
 
