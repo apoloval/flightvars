@@ -24,7 +24,7 @@ namespace flightvars { namespace concurrent {
  *  - It must provide a `execute()` template function with the following signature:
  *
  *      template <class Task>
- *      void execute(Task task)
+ *      void execute(Task&& task)
  *
  *    This function would execute the given task in the context represented by the given executor.
  *    The `Task` type must be invocable with the signature `void(void)`. Any exception thrown by
@@ -45,7 +45,7 @@ public:
     same_thread_executor(same_thread_executor&&) = default;
 
     template <class Task>
-    void execute(Task task) { task(); }
+    void execute(Task&& task) { task(); }
 };
 
 template <>
@@ -68,7 +68,7 @@ public:
     void stop() { _service->stop(); }
 
     template <class Task>
-    void execute(Task task) { _service->post(task); }
+    void execute(Task&& task) { _service->post(std::forward<Task>(task)); }
 
 private:
 

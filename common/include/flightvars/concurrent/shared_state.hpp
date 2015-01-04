@@ -37,10 +37,10 @@ public:
         _control = nullptr;
     }
 
-    template <class F>
-    void set_push_handler(F&& f) {
+    template <class Func>
+    void set_push_handler(Func&& f) {
         check_valid();
-        _control->set_push_handler(f);
+        _control->set_push_handler(std::forward<Func>(f));
     }
 
     void clear_push_handler() {
