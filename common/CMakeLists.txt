@@ -7,6 +7,7 @@ set(flightvars_HEADERS
    include/flightvars/concurrent/future.hpp
    include/flightvars/concurrent/promise.hpp
    include/flightvars/concurrent/shared_state.hpp
+   include/flightvars/concurrent/task.hpp
    include/flightvars/io/buffer.hpp
    include/flightvars/io/connection.hpp
    include/flightvars/io/server.hpp
@@ -51,6 +52,7 @@ set(unittests_SOURCES
    test/concurrent/future-test.cpp
    test/concurrent/promise-test.cpp
    test/concurrent/shared-state-test.cpp
+   test/concurrent/task-test.cpp
    test/io/buffer-test.cpp
    test/mqtt/mock_connection.hpp
    test/mqtt/decoder/connect-test.cpp
