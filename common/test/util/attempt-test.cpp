@@ -10,8 +10,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <flightvars/util/attempt.hpp>
-
-#include "noncopyable.hpp"
+#include <flightvars/util/noncopyable.hpp>
 
 using namespace flightvars::util;
 
