@@ -29,8 +29,18 @@ public:
 
     promise() : _future(_state) {}
 
-    promise(promise&&) = default;
+    promise(promise&& other) : _state(std::move(other.state)),
+                               _future(std::move(other._future)) {}
+
     promise(const promise&) = delete;
+
+    promise& operator = (promise&& other) {
+        _state = std::move(other._state);
+        _future = std::move(other._future);
+        return *this;
+    }
+
+    promise& operator = (const promise&) = delete;
 
     bool valid() const { return _state.valid(); }
 
