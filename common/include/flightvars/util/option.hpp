@@ -47,6 +47,11 @@ public:
         return *this;
     }
 
+    option& operator = (option&& other) {
+        _data.reset(other.is_defined() ? new T(other.extract()) : nullptr);
+        return *this;
+    }
+
     template <class T1>
     option& operator = (const option<T1>& other) {
         _data.reset(other.is_defined() ? new T(other.get()) : nullptr);

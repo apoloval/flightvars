@@ -44,10 +44,15 @@ public:
     /** Create a failure attempt. */
     attempt(const std::exception_ptr& error) : _result(error) {}
 
-    attempt(const attempt& other) = default;
+    attempt(const attempt& other) : _result(other._result) {}
+
     attempt(attempt&& other) = default;
 
-    attempt& operator = (const attempt& other) = default;
+    attempt& operator = (const attempt& other) {
+        _result = other._result;
+        return *this;
+    }
+
     attempt& operator = (attempt&& other) = default;
 
     /** True if this attempt has a state, false otherwise. */
@@ -215,15 +220,9 @@ private:
 };
 
 template <class T>
-typename std::enable_if<!std::is_void<T>::value, attempt<T>>::type
-make_success(const T& value) {
-    return attempt<T>(value); 
-}
-
-template <class T>
-typename std::enable_if<!std::is_void<T>::value, attempt<T>>::type
-move_success(T&& value) {
-    return attempt<T>(std::forward<T>(value));
+typename std::enable_if<!std::is_void<T>::value, attempt<typename std::decay<T>::type>>::type
+make_success(T&& value) {
+    return attempt<typename std::decay<T>::type>(std::forward<T>(value));
 }
 
 template <class T>

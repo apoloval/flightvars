@@ -16,6 +16,7 @@
 
 #include <flightvars/concurrent/executor.hpp>
 #include <flightvars/concurrent/shared_state.hpp>
+#include <flightvars/concurrent/task.hpp>
 
 namespace flightvars { namespace concurrent {
 
@@ -49,6 +50,8 @@ public:
         reset_push_handler();
         return *this;
     }
+
+    future& operator = (const future&) = delete;
 
     bool valid() const { return _state.valid(); }
 
@@ -125,10 +128,10 @@ public:
     template <class U, class Func, class Executor = same_thread_executor>
     future<U> next(Func&& func, Executor&& exec = Executor()) {
         auto p = std::make_shared<promise<U>>();
-        set_push_handler([p, func, exec](util::attempt<T> result) mutable {
+        set_push_handler([p, func, exec](util::attempt<T>&& result) mutable {
             try {
                 auto f = func(result.extract());
-                f.finally([p, exec](util::attempt<U> other_result) {
+                f.finally([p, exec](util::attempt<U>&& other_result) {
                     p->set(std::move(other_result));
                 }, exec);
             }
@@ -162,25 +165,25 @@ private:
 
     void reset_state() { _state.reset(); }
 
-    void result_handler(util::attempt<T> result) {
+    void result_handler(util::attempt<T>&& result) {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
         _result = std::move(result);
         _completion_cond.notify_all();
     }
 
     void reset_push_handler() {
-        set_push_handler(
-            std::bind(&future::result_handler, this, std::placeholders::_1),
-            same_thread_executor());
+        set_push_handler([this](util::attempt<T>&& result) {
+            result_handler(std::move(result));
+        }, same_thread_executor());
     }
 
     template <class Func, class Executor>
     void set_push_handler(Func&& handler, Executor&& exec) {
         if (is_completed()) {
-            run(exec, handler, std::move(_result));
+            exec.execute(make_task(std::forward<Func>(handler), std::move(_result)));
         } else {
             _state.set_push_handler([=](util::attempt<T> result) mutable {
-                run(exec, handler, std::move(result));
+                exec.execute(make_task(std::forward<Func>(handler), std::move(result)));
             });
         }
     }

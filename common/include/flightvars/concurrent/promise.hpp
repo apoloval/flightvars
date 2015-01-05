@@ -29,8 +29,18 @@ public:
 
     promise() : _future(_state) {}
 
-    promise(promise&&) = default;
+    promise(promise&& other) : _state(std::move(other.state)),
+                               _future(std::move(other._future)) {}
+
     promise(const promise&) = delete;
+
+    promise& operator = (promise&& other) {
+        _state = std::move(other._state);
+        _future = std::move(other._future);
+        return *this;
+    }
+
+    promise& operator = (const promise&) = delete;
 
     bool valid() const { return _state.valid(); }
 
@@ -43,11 +53,7 @@ public:
 
     template <class U = T>
     typename std::enable_if<!std::is_void<U>::value>::type
-    set_value(const U& value) { set(util::make_success<T>(value)); }
-
-    template <class U = T>
-    typename std::enable_if<!std::is_void<U>::value>::type
-    set_value(U&& value) { set(util::make_success<T>(std::move(value))); }
+    set_value(U&& value) { set(util::make_success(T(std::forward<U>(value)))); }
 
     template <class U = T>
     typename std::enable_if<std::is_void<U>::value>::type
