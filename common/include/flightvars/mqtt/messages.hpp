@@ -138,11 +138,13 @@ inline std::ostream& operator << (std::ostream& s, const message& msg) {
 using shared_message = std::shared_ptr<message>;
 
 template <class Encoder = codecs::encoder<connect_message>>
-shared_message make_connect(const connect_message::client_id& id,
-                            const util::option<connect_credentials>& credentials,
-                            const util::option<connect_will>& will,
-                            unsigned int keep_alive,
-                            bool clean_session) {
+message make_connect(const connect_message::client_id& id,
+                     const util::option<connect_credentials>& credentials =
+                        util::make_none<connect_credentials>(),
+                     const util::option<connect_will>& will =
+                        util::make_none<connect_will>(),
+                     unsigned int keep_alive = 60,
+                     bool clean_session = true) {
     connect_message msg = { id, credentials, will, keep_alive, clean_session };
     fixed_header header = {
         message_type::CONNECT,      // msg_type
@@ -151,11 +153,11 @@ shared_message make_connect(const connect_message::client_id& id,
         false,                      // retain
         Encoder::encode_len(msg)    // length
     };
-    return std::make_shared<message>(header, msg);
+    return message(header, msg);
 }
 
 template <class Encoder = codecs::encoder<connect_ack_message>>
-shared_message make_connect_ack(connect_return_code ret_code) {
+message make_connect_ack(connect_return_code ret_code) {
     connect_ack_message msg = { ret_code };
     fixed_header header = {
         message_type::CONNACK,      // msg_type
@@ -164,7 +166,7 @@ shared_message make_connect_ack(connect_return_code ret_code) {
         false,                      // retain
         Encoder::encode_len(msg)    // length
     };
-    return std::make_shared<message>(header, msg);
+    return message(header, msg);
 }
 
 }}
