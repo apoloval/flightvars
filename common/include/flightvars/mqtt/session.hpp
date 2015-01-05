@@ -31,8 +31,8 @@ FLIGHTVARS_DECL_EXCEPTION(session_error);
  * to the connection.
  *
  * On its constructor, the Connection object, the handler and one executor are provided.
- * The handler is a function that receives a `mqtt::shared_message` and returns
- * `concurrent::future<mqtt::shared_message>`. That handler is expected to process the incoming
+ * The handler is a function that receives a `mqtt::message` and returns
+ * `concurrent::future<mqtt::message>`. That handler is expected to process the incoming
  * message and produce a future response message. The executor passed as argument is used to
  * execute the read and write actions and the handler.
  *
@@ -69,7 +69,7 @@ private:
 
     util::logger _log;
     typename Connection::shared_ptr _conn;
-    std::function<concurrent::future<shared_message>(const shared_message&)> _msg_handler;
+    std::function<concurrent::future<message>(const message&)> _msg_handler;
     Executor _exec;
     io::buffer _input_buff;
     io::buffer _output_buff;
@@ -87,8 +87,8 @@ private:
         BOOST_LOG_SEV(_log, util::log_level::TRACE) <<
             "Expecting new request for session on " << *_conn;
         read_request()
-            .next<shared_message>(_msg_handler, _exec)
-            .next<void>([me](const shared_message& response) {
+            .next<message>(_msg_handler, _exec)
+            .next<void>([me](const message& response) {
                 return me->write_response(response);
             }, _exec)
             .finally([me](const util::attempt<void>& result) {
@@ -96,21 +96,21 @@ private:
             }, _exec);
     }
 
-    concurrent::future<shared_message> read_request() {
+    concurrent::future<message> read_request() {
         auto me = self();
         _input_buff.reset();
 
         return read_header()
-            .next<shared_message>([me](const fixed_header& header) {
+            .next<message>([me](const fixed_header& header) {
                 return me->read_message_from_header(header);
             });
     }
 
-    concurrent::future<void> write_response(const shared_message& response) {
+    concurrent::future<void> write_response(const message& response) {
         _output_buff.reset();
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
-            "Response message encoded to " << *_conn << ": " << *response;
-        encode(*response, _output_buff);
+            "Response message encoded to " << *_conn << ": " << response;
+        encode(response, _output_buff);
         _output_buff.flip();
         return io::write_remaining(*_conn, _output_buff)
             .then([](std::size_t) {});
@@ -163,7 +163,7 @@ private:
         }
     }
 
-    concurrent::future<shared_message>
+    concurrent::future<message>
     read_message_from_header(const fixed_header& header) {
         auto me = self();
 
@@ -174,8 +174,8 @@ private:
             });
     }
 
-    shared_message decode_content(const fixed_header& header,
-                                  std::size_t bytes_read) {
+    message decode_content(const fixed_header& header,
+                           std::size_t bytes_read) {
         _input_buff.flip();
         auto expected_len = header.len;
         auto actual_len = _input_buff.remaining();
@@ -187,7 +187,7 @@ private:
         auto msg = decode(header, _input_buff);
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
             "Request message decoded from " << *_conn << ": " << *msg;
-        return msg;
+        return *msg;
     }
 };
 

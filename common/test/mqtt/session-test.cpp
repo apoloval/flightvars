@@ -41,31 +41,30 @@ BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
     concurrent::asio_service_executor exec;
     auto req_msg = make_sample_request();
     conn->prepare_read_message(*req_msg);
-    shared_message handled_request;
+    util::option<message> handled_request;
 
-    auto session = make_session(conn, [&](const shared_message& req_msg) {
-        handled_request = req_msg;
-        return concurrent::make_future_success(
-            make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
+    auto session = make_session(conn, [&](const message& req_msg) {
+        handled_request = util::make_some(req_msg);
+        return concurrent::make_future_success<message>(
+            *make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
     }, exec);
     session->start();
     exec.run();
 
     auto response = conn->written_message();
 
-    BOOST_REQUIRE(!!handled_request);
-    BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request->header().msg_type);
+    BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request.get().header().msg_type);
     BOOST_CHECK_EQUAL(message_type::CONNACK, response->header().msg_type);
 }
 
 BOOST_AUTO_TEST_CASE(MustProcessManyRequestsAndResponsesInSameSession) {
     auto conn = make_mock_connection();
     concurrent::asio_service_executor exec;
-    shared_message handled_request;
-    auto session = make_session(conn, [&](const shared_message& req_msg) {
-        handled_request = req_msg;
-        return concurrent::make_future_success(
-            make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
+    util::option<message> handled_request;
+    auto session = make_session(conn, [&](const message& req_msg) {
+        handled_request = util::make_some(req_msg);
+        return concurrent::make_future_success<message>(
+            *make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
     }, exec);
     auto req_msg = make_sample_request();
     conn->prepare_read_messages({ *req_msg, *req_msg, *req_msg });
@@ -74,8 +73,7 @@ BOOST_AUTO_TEST_CASE(MustProcessManyRequestsAndResponsesInSameSession) {
 
     auto response = conn->written_message();
 
-    BOOST_REQUIRE(!!handled_request);
-    BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request->header().msg_type);
+    BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request.get().header().msg_type);
     BOOST_CHECK_EQUAL(message_type::CONNACK, response->header().msg_type);
 }
 
