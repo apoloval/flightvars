@@ -188,8 +188,8 @@ private:
         }
         auto msg = decode(header, _input_buff);
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
-            "Request message decoded from " << *_conn << ": " << *msg;
-        return *msg;
+            "Request message decoded from " << *_conn << ": " << msg;
+        return msg;
     }
 };
 

@@ -43,14 +43,12 @@ inline void encode(const message& msg, io::buffer& buff) {
  *
  * The given buffer should be ready to extract the bytes corresponding to the message body.
  */
-inline shared_message decode(const fixed_header& header, io::buffer& buff) {
+inline message decode(const fixed_header& header, io::buffer& buff) {
     switch (header.msg_type) {
         case message_type::CONNECT:
-            return std::make_shared<message>(
-                header, codecs::decoder<connect_message>::decode(buff));
+            return message(header, codecs::decoder<connect_message>::decode(buff));
         case message_type::CONNACK:
-            return std::make_shared<message>(
-                header, codecs::decoder<connect_ack_message>::decode(buff));
+            return message(header, codecs::decoder<connect_ack_message>::decode(buff));
         default:
             throw std::runtime_error(util::format("cannot decode message of unknown type %s",
                 message_type_str(header.msg_type)));

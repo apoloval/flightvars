@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
     auto response = conn->written_message();
 
     BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request.get().header().msg_type);
-    BOOST_CHECK_EQUAL(message_type::CONNACK, response->header().msg_type);
+    BOOST_CHECK_EQUAL(message_type::CONNACK, response.header().msg_type);
 }
 
 BOOST_AUTO_TEST_CASE(MustProcessManyRequestsAndResponsesInSameSession) {
@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(MustProcessManyRequestsAndResponsesInSameSession) {
     auto response = conn->written_message();
 
     BOOST_CHECK_EQUAL(message_type::CONNECT, handled_request.get().header().msg_type);
-    BOOST_CHECK_EQUAL(message_type::CONNACK, response->header().msg_type);
+    BOOST_CHECK_EQUAL(message_type::CONNACK, response.header().msg_type);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

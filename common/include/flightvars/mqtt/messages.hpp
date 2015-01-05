@@ -135,8 +135,6 @@ inline std::ostream& operator << (std::ostream& s, const message& msg) {
     return s;
 }
 
-using shared_message = std::shared_ptr<message>;
-
 template <class Encoder = codecs::encoder<connect_message>>
 message make_connect(const connect_message::client_id& id,
                      const util::option<connect_credentials>& credentials =

@@ -54,7 +54,7 @@ public:
         _read_buffer.flip();
     }
 
-    shared_message written_message() {
+    message written_message() {
         _write_buffer.flip();
         auto header = codecs::decoder<fixed_header>::decode(_write_buffer);
         _write_buffer.reset();
