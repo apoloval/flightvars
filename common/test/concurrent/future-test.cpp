@@ -11,6 +11,7 @@
 
 #include <flightvars/concurrent/future.hpp>
 #include <flightvars/concurrent/promise.hpp>
+#include <flightvars/util/noncopyable.hpp>
 
 using namespace flightvars;
 using namespace flightvars::concurrent;
@@ -20,8 +21,8 @@ BOOST_AUTO_TEST_SUITE(ConcurrentFuture)
 FV_DECL_EXCEPTION(custom_exception);
 
 BOOST_AUTO_TEST_CASE(MustMakeFutureSuccess) {
-    auto f = make_future_success<std::string>("Hello!");
-    BOOST_CHECK_EQUAL("Hello!", f.get());
+    auto f = make_future_success(util::make_noncopyable<std::string>("Hello!"));
+    BOOST_CHECK_EQUAL("Hello!", *f.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustMakeFutureSuccessVoid) {
@@ -30,65 +31,65 @@ BOOST_AUTO_TEST_CASE(MustMakeFutureSuccessVoid) {
 }
 
 BOOST_AUTO_TEST_CASE(MustMakeFutureFailure) {
-    auto f = make_future_failure<std::string>(custom_exception("failed"));
+    auto f = make_future_failure<util::noncopyable<std::string>>(custom_exception("failed"));
     BOOST_CHECK_THROW(f.get(), custom_exception);
 }
 
 BOOST_AUTO_TEST_CASE(MustInitInvalidWithDefaultConstructor) {
-    future<std::string> f;
+    future<util::noncopyable<std::string>> f;
     BOOST_CHECK(!f.valid());
 }
 
 BOOST_AUTO_TEST_CASE(MustThrowOnGetWhenNotValid) {
-    future<std::string> f;
+    future<util::noncopyable<std::string>> f;
     BOOST_CHECK_THROW(f.get(), bad_future);
 }
 
 BOOST_AUTO_TEST_CASE(MustThrowOnWaitWhenNotValid) {
-    future<std::string> f;
+    future<util::noncopyable<std::string>> f;
     BOOST_CHECK_THROW(f.wait(), bad_future);
 }
 
 BOOST_AUTO_TEST_CASE(MustThrowOnWaitForWhenNotValid) {
-    future<std::string> f;
+    future<util::noncopyable<std::string>> f;
     BOOST_CHECK_THROW(f.wait_for(std::chrono::seconds(1)), bad_future);
 }
 
 BOOST_AUTO_TEST_CASE(MustBeIncompleteBeforePromiseIsSet) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
     BOOST_CHECK(!f.is_completed());
 }
 
 BOOST_AUTO_TEST_CASE(MustBeCompletedAfterPromiseIsSet) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
     p.set_value("Hello!");
     BOOST_CHECK(f.is_completed());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetWhenPromiseIsSet) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
     p.set_value("Hello!");
-    BOOST_CHECK_EQUAL("Hello!", f.get());
+    BOOST_CHECK_EQUAL("Hello!", *f.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustWaitForWhenPromiseIsSet) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
     p.set_value("Hello!");
     BOOST_CHECK_NO_THROW(f.wait_for(std::chrono::seconds(1)));
 }
 
 BOOST_AUTO_TEST_CASE(MustThrowWaitForWhenPromiseIsNotSet) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
     BOOST_CHECK_THROW(f.wait_for(std::chrono::milliseconds(25)), future_timeout);
 }
 
 BOOST_AUTO_TEST_CASE(MustInvalidateSourceAfterMoveConstruct) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
     auto f2 = std::move(f1);
     BOOST_CHECK(!f1.valid());
@@ -96,29 +97,29 @@ BOOST_AUTO_TEST_CASE(MustInvalidateSourceAfterMoveConstruct) {
 }
 
 BOOST_AUTO_TEST_CASE(MustInvalidateSourceAfterMoveAssign) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    future<std::string> f2;
+    future<util::noncopyable<std::string>> f2;
     f2 = std::move(f1);
     BOOST_CHECK(!f1.valid());
     BOOST_CHECK(f2.valid());
 }
 
 BOOST_AUTO_TEST_CASE(MustOperateNormallyAfterMoveConstruct) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
     auto f2 = std::move(f1);
     p.set_value("Hello!");
-    BOOST_CHECK_EQUAL("Hello!", f2.get());
+    BOOST_CHECK_EQUAL("Hello!", *f2.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustOperateNormallyAfterMoveAssign) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    future<std::string> f2;
+    future<util::noncopyable<std::string>> f2;
     f2 = std::move(f1);
     p.set_value("Hello!");
-    BOOST_CHECK_EQUAL("Hello!", f2.get());
+    BOOST_CHECK_EQUAL("Hello!", *f2.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustSetValueFromVoidPromise) {
@@ -136,64 +137,70 @@ BOOST_AUTO_TEST_CASE(MustSetExceptionFromVoidPromise) {
 }
 
 BOOST_AUTO_TEST_CASE(MustBeInvalidAfterThen) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.then([](std::string s) { return s.length(); });
+    auto f2 = f1.then([](const util::noncopyable<std::string>& s) { return s.get().length(); });
     BOOST_CHECK(!f1.valid());
     BOOST_CHECK(f2.valid());
 }
 
 BOOST_AUTO_TEST_CASE(MustBeInvalidAfterNext) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    auto f2 = f1.next<std::size_t>([](const util::noncopyable<std::string>& s) {
+        return make_future_success(s.get().length());
+    });
     BOOST_CHECK(!f1.valid());
     BOOST_CHECK(f2.valid());
 }
 
 BOOST_AUTO_TEST_CASE(MustBeInvalidAfterFinally) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
-    util::attempt<std::string> result;
-    f.finally([&](util::attempt<std::string> r) {
+    util::attempt<util::noncopyable<std::string>> result;
+    f.finally([&](util::attempt<util::noncopyable<std::string>> r) {
         result = std::move(r);
     });
     BOOST_CHECK(!f.valid());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnThen) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.then([](std::string s) { return s.length(); });
+    auto f2 = f1.then([](const util::noncopyable<std::string>& s) { return s.get().length(); });
     p.set_value("Hello!");
     BOOST_CHECK_EQUAL(6, f2.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnThenAfterResult) {
-    auto f1 = make_future_success<std::string>("Hello!");
-    auto f2 = f1.then([](std::string s) { return s.length(); });
+    auto f1 = make_future_success(util::make_noncopyable<std::string>("Hello!"));
+    auto f2 = f1.then([](const util::noncopyable<std::string>& s) { return s.get().length(); });
     BOOST_CHECK_EQUAL(6, f2.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnThenVoid) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.then([](std::string s) {});
+    auto f2 = f1.then([](const util::noncopyable<std::string>& s) {});
     p.set_value("Hello!");
     BOOST_CHECK_NO_THROW(f2.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnNext) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    auto f2 = f1.next<std::size_t>([](const util::noncopyable<std::string>& s) {
+        return make_future_success(s.get().length());
+    });
     p.set_value("Hello!");
     BOOST_CHECK_EQUAL(6, f2.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnNextAfterResult) {
-    auto f1 = make_future_success<std::string>("Hello!");
-    auto f2 = f1.next<std::size_t>([](std::string s) { return make_future_success(s.length()); });
+    auto f1 = make_future_success(util::make_noncopyable<std::string>("Hello!"));
+    auto f2 = f1.next<std::size_t>([](const util::noncopyable<std::string>& s) {
+        return make_future_success(s.get().length());
+    });
     BOOST_CHECK_EQUAL(6, f2.get());
 }
 
@@ -206,9 +213,9 @@ BOOST_AUTO_TEST_CASE(MustGetValueOnNextVoid) {
 }
 
 BOOST_AUTO_TEST_CASE(MustThrowFailureOnNext) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.next<std::size_t>([](std::string s) -> future<std::size_t> {
+    auto f2 = f1.next<std::size_t>([](const util::noncopyable<std::string>& s) -> future<std::size_t> {
         throw custom_exception("failed");
     });
     p.set_value("Hello!");
@@ -216,9 +223,9 @@ BOOST_AUTO_TEST_CASE(MustThrowFailureOnNext) {
 }
 
 BOOST_AUTO_TEST_CASE(MustThrowFailureOnNextVoid) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f1 = p.get_future();
-    auto f2 = f1.next<void>([](std::string s) -> future<void> {
+    auto f2 = f1.next<void>([](const util::noncopyable<std::string>& s) -> future<void> {
         throw custom_exception("failed");
     });
     p.set_value("Hello!");
@@ -226,25 +233,25 @@ BOOST_AUTO_TEST_CASE(MustThrowFailureOnNextVoid) {
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnFinally) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
-    util::attempt<std::string> result;
-    f.finally([&](util::attempt<std::string> r) {
+    util::attempt<util::noncopyable<std::string>> result;
+    f.finally([&](util::attempt<util::noncopyable<std::string>> r) {
         result = std::move(r);
     });
     p.set_value("Hello!");
-    BOOST_CHECK_EQUAL("Hello!", result.get());
+    BOOST_CHECK_EQUAL("Hello!", *result.get());
 }
 
 BOOST_AUTO_TEST_CASE(MustGetValueOnFinallyAfterResult) {
-    promise<std::string> p;
+    promise<util::noncopyable<std::string>> p;
     auto f = p.get_future();
     p.set_value("Hello!");
-    util::attempt<std::string> result;
-    f.finally([&](util::attempt<std::string> r) {
+    util::attempt<util::noncopyable<std::string>> result;
+    f.finally([&](util::attempt<util::noncopyable<std::string>> r) {
         result = std::move(r);
     });
-    BOOST_CHECK_EQUAL("Hello!", result.get());
+    BOOST_CHECK_EQUAL("Hello!", *result.get());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
