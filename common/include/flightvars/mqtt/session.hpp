@@ -69,7 +69,7 @@ private:
 
     util::logger _log;
     typename Connection::shared_ptr _conn;
-    std::function<concurrent::future<message>(const message&)> _msg_handler;
+    std::function<concurrent::future<message>(message&&)> _msg_handler;
     Executor _exec;
     io::buffer _input_buff;
     io::buffer _output_buff;
@@ -88,11 +88,11 @@ private:
             "Expecting new request for session on " << *_conn;
         read_request()
             .next<message>(_msg_handler, _exec)
-            .next<void>([me](const message& response) {
-                return me->write_response(response);
+            .next<void>([me](message&& response) {
+                return me->write_response(std::move(response));
             }, _exec)
-            .finally([me](const util::attempt<void>& result) {
-                me->request_processed(result);
+            .finally([me](util::attempt<void>&& result) {
+                me->request_processed(std::move(result));
             }, _exec);
     }
 
@@ -101,12 +101,12 @@ private:
         _input_buff.reset();
 
         return read_header()
-            .next<message>([me](const fixed_header& header) {
-                return me->read_message_from_header(header);
+            .next<message>([me](fixed_header&& header) {
+                return me->read_message_from_header(std::move(header));
             });
     }
 
-    concurrent::future<void> write_response(const message& response) {
+    concurrent::future<void> write_response(message&& response) {
         _output_buff.reset();
         BOOST_LOG_SEV(_log, util::log_level::DEBUG) <<
             "Response message encoded to " << *_conn << ": " << response;
@@ -116,7 +116,7 @@ private:
             .then([](std::size_t) {});
     }
 
-    void request_processed(const util::attempt<void>& result) {
+    void request_processed(util::attempt<void>&& result) {
         try { 
             result.get();
             BOOST_LOG_SEV(_log, util::log_level::DEBUG) << 
@@ -164,11 +164,13 @@ private:
     }
 
     concurrent::future<message>
-    read_message_from_header(const fixed_header& header) {
+    read_message_from_header(fixed_header&& header) {
         auto me = self();
 
         _input_buff.reset();
         return _conn->read(_input_buff, header.len)
+            // At this point, header should be copied; once C++14 is supported,
+            // a rvalue reference should be passed to the lambda closure instead.
             .then([me, header](std::size_t bytes_read) {
                 return me->decode_content(header, bytes_read);
             });

@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(MustRoundTripRequestAndResponse) {
     conn->prepare_read_message(*req_msg);
     util::option<message> handled_request;
 
-    auto session = make_session(conn, [&](const message& req_msg) {
+    auto session = make_session(conn, [&](message&& req_msg) {
         handled_request = util::make_some(req_msg);
         return concurrent::make_future_success<message>(
             *make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(MustProcessManyRequestsAndResponsesInSameSession) {
     auto conn = make_mock_connection();
     concurrent::asio_service_executor exec;
     util::option<message> handled_request;
-    auto session = make_session(conn, [&](const message& req_msg) {
+    auto session = make_session(conn, [&](message&& req_msg) {
         handled_request = util::make_some(req_msg);
         return concurrent::make_future_success<message>(
             *make_connect_ack(connect_return_code::SERVER_UNAVAILABLE));
