@@ -22,7 +22,11 @@ FV_DECL_EXCEPTION(mock_connection_closed);
 class mock_connection {
 public:
 
-    using shared_ptr = std::shared_ptr<mock_connection>;    
+    using shared_ptr = std::shared_ptr<mock_connection>;
+
+    mock_connection() {
+        _read_buffer.flip();
+    }
 
     concurrent::future<std::size_t> read(io::buffer& buff, std::size_t bytes) {
         if (_read_buffer.remaining() == 0) {
@@ -41,20 +45,14 @@ public:
     }
 
     void prepare_read_message(const message& msg) {
+        auto last = _read_buffer.limit();
         _read_buffer.reset();
+        _read_buffer.inc_pos(last);
         encode(msg, _read_buffer);
         _read_buffer.flip();
     }
 
-    void prepare_read_messages(std::initializer_list<message> messages) {
-        _read_buffer.reset();
-        std::for_each(messages.begin(), messages.end(), [this](const message& msg) {
-            encode(msg, _read_buffer);
-        });
-        _read_buffer.flip();
-    }
-
-    shared_message written_message() {
+    message written_message() {
         _write_buffer.flip();
         auto header = codecs::decoder<fixed_header>::decode(_write_buffer);
         _write_buffer.reset();
