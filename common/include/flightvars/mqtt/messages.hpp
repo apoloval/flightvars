@@ -102,6 +102,9 @@ inline std::ostream& operator << (std::ostream& s, const fixed_header& header) {
 class message {
 public:
 
+    message(const message&) = delete;
+    message(message&&) = default;
+
     message(const fixed_header& hd, const connect_message& msg)
       : _header(hd), _connect(util::make_some(msg)),
         _content_str(std::bind(&connect_message::str, msg)) {}
@@ -109,6 +112,9 @@ public:
     message(const fixed_header& hd, const connect_ack_message& msg)
       : _header(hd), _connect_ack(util::make_some(msg)),
         _content_str(std::bind(&connect_ack_message::str, msg)) {}
+
+    message& operator = (const message&) = delete;
+    message& operator = (message&&) = default;
 
     const fixed_header& header() const { return _header; }
 
