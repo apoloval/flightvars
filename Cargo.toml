@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Alvaro Polo <apoloval@gmail.com>"]
 
 [dependencies]
+libc = "*"
+log = "*"
+log4rs = "*"
 
 [lib]
 crate-type = ["dylib"]
