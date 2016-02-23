@@ -13,45 +13,10 @@ extern crate log;
 extern crate libc;
 extern crate log4rs;
 
-use std::mem::size_of;
-use std::ptr;
-
-use libc::malloc;
-
+// Only fs module is using `logging`.
+// Remove this conditional compilation when that's not true.
+#[cfg(windows)]
 mod logging;
 
-struct Module;
-
-impl Module {
-    pub fn new() -> Self { Module }
-    pub fn start(&mut self) {
-        logging::config_logging();
-        info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
-        info!("FlightVars module started successfully");
-    }
-    pub fn stop(self) {
-        info!("Stopping FlightVars module");
-        info!("FlightVars module stopped successfully");
-    }
-}
-
-const FLIGHTVARS_VERSION: &'static str = "0.1.0";
-
-static mut MODULE: *mut Module = 0 as *mut Module;
-
-#[export_name="\x01_DLLStart"]
-pub extern "stdcall" fn dll_start() {
-    unsafe {
-        MODULE = malloc(size_of::<Module>() as u32) as *mut Module;
-        ptr::write(MODULE, Module::new());
-        (*MODULE).start();
-    }
-}
-
-#[export_name="\x01_DLLStop"]
-pub extern "stdcall" fn dll_stop() {
-    unsafe {
-        let m = ptr::read(MODULE);
-        m.stop();
-    }
-}
+#[cfg(windows)]
+mod fs;
