@@ -8,13 +8,13 @@
 
 use std::io;
 use std::os::unix::io::{IntoRawFd, RawFd};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use libc;
 
 pub fn split<T: IntoRawFd + io::Read + io::Write>(device: T) -> (SplitRead, SplitWrite) {
     let fd = device.into_raw_fd();
-    let socket = Rc::new(SharedFd::new(fd));
+    let socket = Arc::new(SharedFd::new(fd));
     (SplitRead::new(&socket), SplitWrite::new(&socket))
 }
 
@@ -38,11 +38,11 @@ impl Drop for SharedFd {
 }
 
 pub struct SplitRead {
-    socket: Rc<SharedFd>
+    socket: Arc<SharedFd>
 }
 
 impl SplitRead {
-    fn new(socket: &Rc<SharedFd>) -> SplitRead { SplitRead { socket: socket.clone() }}
+    fn new(socket: &Arc<SharedFd>) -> SplitRead { SplitRead { socket: socket.clone() }}
 }
 
 impl io::Read for SplitRead {
@@ -61,11 +61,11 @@ impl io::Read for SplitRead {
 }
 
 pub struct SplitWrite {
-    socket: Rc<SharedFd>
+    socket: Arc<SharedFd>
 }
 
 impl SplitWrite {
-    fn new(socket: &Rc<SharedFd>) -> SplitWrite { SplitWrite { socket: socket.clone() }}
+    fn new(socket: &Arc<SharedFd>) -> SplitWrite { SplitWrite { socket: socket.clone() }}
 }
 
 impl io::Write for SplitWrite {
@@ -96,6 +96,7 @@ impl io::Write for SplitWrite {
 mod tests {
     use std::io::*;
     use std::net::TcpStream;
+    use std::thread;
 
     use super::*;
 
@@ -125,4 +126,24 @@ mod tests {
         assert_eq!(input.read(&mut rep).unwrap(), 4);
         assert_eq!(&rep[..], b"HTTP");
     }
+
+    #[test]
+    fn should_read_and_write_after_split_from_different_threads() {
+        let stream = TcpStream::connect("www.google.com:80").unwrap();
+        let (mut input, mut output) = split(stream);
+        let th1 = thread::spawn(move || {
+            output.write_all(b"GET / HTTP/1.1\n").unwrap();
+            output.write_all(b"Host: www.google.com\n").unwrap();
+            output.write_all(b"Connetion: close\n\n").unwrap();
+        });
+        let th2 = thread::spawn(move || {
+            let mut rep = [0; 4];
+            assert_eq!(input.read(&mut rep).unwrap(), 4);
+            assert_eq!(&rep[..], b"HTTP");
+        });
+        th1.join().unwrap();
+        th2.join().unwrap();
+    }
+
+
 }
