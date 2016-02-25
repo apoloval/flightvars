@@ -9,6 +9,8 @@
 #[macro_use]
 extern crate log;
 
+extern crate byteorder;
+extern crate hex;
 extern crate libc;
 extern crate log4rs;
 

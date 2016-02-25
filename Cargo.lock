@@ -2,10 +2,22 @@
 name = "flightvars"
 version = "0.1.0"
 dependencies = [
+ "byteorder 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log4rs 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "byteorder"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "hex"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "kernel32-sys"
