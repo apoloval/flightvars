@@ -1,4 +1,3 @@
-
 //
 // FlightVars
 // Copyright (c) 2015, 2016 Alvaro Polo
