@@ -72,10 +72,35 @@ impl FromStr for OffsetLength {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Offset(OffsetAddr, OffsetLength);
+
+impl fmt::Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}:{}", self.0, self.1)
+    }
+}
+
+impl FromStr for Offset {
+    type Err = io::Error;
+    fn from_str(s: &str) -> Result<Offset, io::Error> {
+        let pair: Vec<&str> = s.split(":").collect();
+        if pair.len() == 2 {
+            let addr = try!(OffsetAddr::from_hex(pair[0]));
+            let len = try!(OffsetLength::from_str(pair[1]));
+            Ok(Offset(addr, len))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid FSUIPC offset in '{}'", s)))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Message {
     Begin { version: u16, client_id: String },
     WriteLvar { lvar: String, value: i64 },
-    WriteOffset { address: OffsetAddr, length: OffsetLength, value: i64 },
+    WriteOffset { offset: Offset, value: i64 },
     ObserveLvar { lvar: String }
 }
 
@@ -89,8 +114,8 @@ impl Message {
         Message::WriteLvar { lvar: lvar.to_string(), value: value }
     }
 
-    pub fn write_offset(addr: OffsetAddr, len: OffsetLength, value: i64) -> Message {
-        Message::WriteOffset { address: addr, length: len, value: value }
+    pub fn write_offset(offset: Offset, value: i64) -> Message {
+        Message::WriteOffset { offset: offset, value: value }
     }
 
     pub fn obs_lvar(lvar: &str) -> Message {
@@ -117,8 +142,8 @@ impl Message {
                 write!(w, "BEGIN {} {}\n", version, client_id),
             &Message::WriteLvar { ref lvar, value} =>
                 write!(w, "WRITE_LVAR {} {}\n", lvar, value),
-            &Message::WriteOffset { ref address, ref length, value } =>
-                write!(w, "WRITE_OFFSET {}:{} {}\n", address, length, value),
+            &Message::WriteOffset { ref offset, value } =>
+                write!(w, "WRITE_OFFSET {} {}\n", offset, value),
             &Message::ObserveLvar { ref lvar } =>
                 write!(w, "OBS_LVAR {}\n", lvar),
         }
@@ -145,14 +170,11 @@ impl Message {
     fn decode_write_offset<'a, I: Iterator<Item=&'a str>>(
             line: &str, args: &mut I) -> io::Result<Message> {
         let error = || Message::input_error(line);
-        let mut offset = try!(args.next().ok_or_else(&error)).split(":");
-        let addr = try!(offset.next().ok_or_else(&error));
-        let addr: OffsetAddr = try!(OffsetAddr::from_hex(&addr).map_err(|_| error()));
-        let len = try!(offset.next().ok_or_else(&error));
-        let len = try!(len.parse().map_err(|_| error()));
+        let offset = try!(args.next().ok_or_else(&error));
+        let offset = try!(offset.parse().map_err(|_| error()));
         let value = try!(args.next().ok_or_else(&error));
         let value = try!(value.parse().map_err(|_| error()));
-        Ok(Message::write_offset(addr, len, value))
+        Ok(Message::write_offset(offset, value))
     }
 
     fn decode_obs_lvar<'a, I: Iterator<Item=&'a str>>(
@@ -205,7 +227,7 @@ mod tests {
     #[test]
     fn should_encode_write_offset_msg() {
         let mut buf = vec![];
-        let msg = Message::write_offset(OffsetAddr(0x1234), OffsetLength::Uw, 42);
+        let msg = Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLength::Uw), 42);
         msg.encode(&mut buf).unwrap();
         assert_eq!(buf, b"WRITE_OFFSET 1234:UW 42\n")
     }
@@ -214,7 +236,7 @@ mod tests {
     fn should_decode_write_offset_msg() {
         let mut buf = &b"WRITE_OFFSET 1234:UW 42\n"[..];
         let msg = Message::decode(&mut buf).unwrap();
-        assert_eq!(msg, Message::write_offset(OffsetAddr(0x1234), OffsetLength::Uw, 42));
+        assert_eq!(msg, Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLength::Uw), 42));
     }
 
     #[test]
