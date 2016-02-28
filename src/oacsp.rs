@@ -212,56 +212,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_encode_begin_msg() {
+    fn should_display_begin_msg() {
         let msg = Message::begin(1, "arduino");
         let buf = format!("{}", msg);
         assert_eq!(buf, "BEGIN 1 arduino")
     }
 
     #[test]
-    fn should_decode_begin_msg() {
+    fn should_parse_begin_msg() {
         let buf = "BEGIN 1 arduino";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::begin(1, "arduino"));
     }
 
     #[test]
-    fn should_encode_write_lvar_msg() {
+    fn should_display_write_lvar_msg() {
         let msg = Message::write_lvar("foobar", 42);
         let buf = format!("{}", msg);
         assert_eq!(buf, "WRITE_LVAR foobar 42")
     }
 
     #[test]
-    fn should_decode_write_lvar_msg() {
+    fn should_parse_write_lvar_msg() {
         let buf = "WRITE_LVAR foobar 42";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::write_lvar("foobar", 42));
     }
 
     #[test]
-    fn should_encode_write_offset_msg() {
+    fn should_display_write_offset_msg() {
         let msg = Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42);
         let buf = format!("{}", msg);
         assert_eq!(buf, "WRITE_OFFSET 1234:UW 42")
     }
 
     #[test]
-    fn should_decode_write_offset_msg() {
+    fn should_parse_write_offset_msg() {
         let buf = "WRITE_OFFSET 1234:UW 42";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42));
     }
 
     #[test]
-    fn should_encode_obs_lvar_msg() {
+    fn should_display_obs_lvar_msg() {
         let msg = Message::obs_lvar("foobar");
         let buf = format!("{}", msg);
         assert_eq!(buf, "OBS_LVAR foobar")
     }
 
     #[test]
-    fn should_decode_obs_lvar_msg() {
+    fn should_parse_obs_lvar_msg() {
         let buf = "OBS_LVAR foobar";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::obs_lvar("foobar"));
