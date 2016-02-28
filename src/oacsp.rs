@@ -125,13 +125,14 @@ impl Message {
     pub fn decode<R: io::BufRead>(r: &mut R) -> io::Result<Message> {
         let mut line = String::new();
         try!(r.read_line(&mut line));
-        let mut split = line.split_whitespace();
-        let cmd = try!(split.next().ok_or(Message::input_error(&line)));
+        let args: Vec<&str> = line.split_whitespace().collect();
+        let cmd = args[0];
+        let args = &args[1..];
         match &cmd.to_uppercase()[..] {
-            "BEGIN" => Message::decode_begin(&line, &mut split),
-            "WRITE_LVAR" => Message::decode_write_lvar(&line, &mut split),
-            "WRITE_OFFSET" => Message::decode_write_offset(&line, &mut split),
-            "OBS_LVAR" => Message::decode_obs_lvar(&line, &mut split),
+            "BEGIN" => Message::decode_begin(&line, &args),
+            "WRITE_LVAR" => Message::decode_write_lvar(&line, &args),
+            "WRITE_OFFSET" => Message::decode_write_offset(&line, &args),
+            "OBS_LVAR" => Message::decode_obs_lvar(&line, &args),
             _ => Err(Message::input_error(&line)),
         }
     }
@@ -149,38 +150,34 @@ impl Message {
         }
     }
 
-    fn decode_begin<'a, I: Iterator<Item=&'a str>>(
-            line: &str, args: &mut I) -> io::Result<Message> {
-        let error = || Message::input_error(line);
-        let version = try!(args.next().ok_or_else(&error));
-        let client_id = try!(args.next().ok_or_else(&error));
-        let version = try!(version.parse().map_err(|_| error()));
-        Ok(Message::begin(version, &client_id))
+    fn decode_begin(line: &str, args: &[&str]) -> io::Result<Message> {
+        try!(Message::require_argc(args, 2, line));
+        let ver = try!(args[0].parse().map_err(|_| Message::input_error(line)));
+        Ok(Message::begin(ver, args[1]))
     }
 
-    fn decode_write_lvar<'a, I: Iterator<Item=&'a str>>(
-            line: &str, args: &mut I) -> io::Result<Message> {
-        let error = || Message::input_error(line);
-        let lvar = try!(args.next().ok_or_else(&error));
-        let value = try!(args.next().ok_or_else(&error));
-        let value = try!(value.parse().map_err(|_| error()));
+    fn decode_write_lvar(line: &str, args: &[&str]) -> io::Result<Message> {
+        try!(Message::require_argc(args, 2, line));
+        let lvar = args[0];
+        let value = try!(args[1].parse().map_err(|_| Message::input_error(line)));
         Ok(Message::write_lvar(&lvar, value))
     }
 
-    fn decode_write_offset<'a, I: Iterator<Item=&'a str>>(
-            line: &str, args: &mut I) -> io::Result<Message> {
-        let error = || Message::input_error(line);
-        let offset = try!(args.next().ok_or_else(&error));
-        let offset = try!(offset.parse().map_err(|_| error()));
-        let value = try!(args.next().ok_or_else(&error));
-        let value = try!(value.parse().map_err(|_| error()));
+    fn decode_write_offset(line: &str, args: &[&str]) -> io::Result<Message> {
+        try!(Message::require_argc(args, 2, line));
+        let offset = try!(args[0].parse());
+        let value = try!(args[1].parse().map_err(|_| Message::input_error(line)));
         Ok(Message::write_offset(offset, value))
     }
 
-    fn decode_obs_lvar<'a, I: Iterator<Item=&'a str>>(
-            line: &str, args: &mut I) -> io::Result<Message> {
-        let lvar = try!(args.next().ok_or(Message::input_error(line)));
-        Ok(Message::obs_lvar(&lvar))
+    fn decode_obs_lvar(line: &str, args: &[&str]) -> io::Result<Message> {
+        try!(Message::require_argc(args, 1, line));
+        Ok(Message::obs_lvar(args[0]))
+    }
+
+    fn require_argc(args: &[&str], expected: usize, line: &str) -> io::Result<()> {
+        if args.len() == expected { Ok(()) }
+        else { Err(Message::input_error(line)) }
     }
 
     fn input_error(line: &str) -> io::Error {
