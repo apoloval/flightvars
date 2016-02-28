@@ -75,7 +75,8 @@ impl FromStr for OffsetLength {
 pub enum Message {
     Begin { version: u16, client_id: String },
     WriteLvar { lvar: String, value: i64 },
-    WriteOffset { address: OffsetAddr, length: OffsetLength, value: i64 }
+    WriteOffset { address: OffsetAddr, length: OffsetLength, value: i64 },
+    ObserveLvar { lvar: String }
 }
 
 impl Message {
@@ -92,6 +93,10 @@ impl Message {
         Message::WriteOffset { address: addr, length: len, value: value }
     }
 
+    pub fn obs_lvar(lvar: &str) -> Message {
+        Message::ObserveLvar { lvar: lvar.to_string() }
+    }
+
     pub fn decode<R: io::BufRead>(r: &mut R) -> io::Result<Message> {
         let mut line = String::new();
         try!(r.read_line(&mut line));
@@ -101,6 +106,7 @@ impl Message {
             "BEGIN" => Message::decode_begin(&line, &mut split),
             "WRITE_LVAR" => Message::decode_write_lvar(&line, &mut split),
             "WRITE_OFFSET" => Message::decode_write_offset(&line, &mut split),
+            "OBS_LVAR" => Message::decode_obs_lvar(&line, &mut split),
             _ => Err(Message::input_error(&line)),
         }
     }
@@ -113,6 +119,8 @@ impl Message {
                 write!(w, "WRITE_LVAR {} {}\n", lvar, value),
             &Message::WriteOffset { ref address, ref length, value } =>
                 write!(w, "WRITE_OFFSET {}:{} {}\n", address, length, value),
+            &Message::ObserveLvar { ref lvar } =>
+                write!(w, "OBS_LVAR {}\n", lvar),
         }
     }
 
@@ -145,6 +153,12 @@ impl Message {
         let value = try!(args.next().ok_or_else(&error));
         let value = try!(value.parse().map_err(|_| error()));
         Ok(Message::write_offset(addr, len, value))
+    }
+
+    fn decode_obs_lvar<'a, I: Iterator<Item=&'a str>>(
+            line: &str, args: &mut I) -> io::Result<Message> {
+        let lvar = try!(args.next().ok_or(Message::input_error(line)));
+        Ok(Message::obs_lvar(&lvar))
     }
 
     fn input_error(line: &str) -> io::Error {
@@ -201,5 +215,20 @@ mod tests {
         let mut buf = &b"WRITE_OFFSET 1234:UW 42\n"[..];
         let msg = Message::decode(&mut buf).unwrap();
         assert_eq!(msg, Message::write_offset(OffsetAddr(0x1234), OffsetLength::Uw, 42));
+    }
+
+    #[test]
+    fn should_encode_obs_lvar_msg() {
+        let mut buf = vec![];
+        let msg = Message::obs_lvar("foobar");
+        msg.encode(&mut buf).unwrap();
+        assert_eq!(buf, b"OBS_LVAR foobar\n")
+    }
+
+    #[test]
+    fn should_decode_obs_lvar_msg() {
+        let mut buf = &b"OBS_LVAR foobar\n"[..];
+        let msg = Message::decode(&mut buf).unwrap();
+        assert_eq!(msg, Message::obs_lvar("foobar"));
     }
 }
