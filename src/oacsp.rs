@@ -121,17 +121,19 @@ impl Message {
     pub fn obs_lvar(lvar: &str) -> Message {
         Message::ObserveLvar { lvar: lvar.to_string() }
     }
+}
 
-    pub fn encode<W: io::Write>(&self, w: &mut W) -> io::Result<()> {
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             &Message::Begin { version, ref client_id } =>
-                write!(w, "BEGIN {} {}\n", version, client_id),
+                write!(f, "BEGIN {} {}", version, client_id),
             &Message::WriteLvar { ref lvar, value} =>
-                write!(w, "WRITE_LVAR {} {}\n", lvar, value),
+                write!(f, "WRITE_LVAR {} {}", lvar, value),
             &Message::WriteOffset { ref offset, value } =>
-                write!(w, "WRITE_OFFSET {} {}\n", offset, value),
+                write!(f, "WRITE_OFFSET {} {}", offset, value),
             &Message::ObserveLvar { ref lvar } =>
-                write!(w, "OBS_LVAR {}\n", lvar),
+                write!(f, "OBS_LVAR {}", lvar),
         }
     }
 }
@@ -211,10 +213,9 @@ mod tests {
 
     #[test]
     fn should_encode_begin_msg() {
-        let mut buf = vec![];
         let msg = Message::begin(1, "arduino");
-        msg.encode(&mut buf).unwrap();
-        assert_eq!(buf, b"BEGIN 1 arduino\n")
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "BEGIN 1 arduino")
     }
 
     #[test]
@@ -226,10 +227,9 @@ mod tests {
 
     #[test]
     fn should_encode_write_lvar_msg() {
-        let mut buf = vec![];
         let msg = Message::write_lvar("foobar", 42);
-        msg.encode(&mut buf).unwrap();
-        assert_eq!(buf, b"WRITE_LVAR foobar 42\n")
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "WRITE_LVAR foobar 42")
     }
 
     #[test]
@@ -241,10 +241,9 @@ mod tests {
 
     #[test]
     fn should_encode_write_offset_msg() {
-        let mut buf = vec![];
         let msg = Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42);
-        msg.encode(&mut buf).unwrap();
-        assert_eq!(buf, b"WRITE_OFFSET 1234:UW 42\n")
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "WRITE_OFFSET 1234:UW 42")
     }
 
     #[test]
@@ -256,10 +255,9 @@ mod tests {
 
     #[test]
     fn should_encode_obs_lvar_msg() {
-        let mut buf = vec![];
         let msg = Message::obs_lvar("foobar");
-        msg.encode(&mut buf).unwrap();
-        assert_eq!(buf, b"OBS_LVAR foobar\n")
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "OBS_LVAR foobar")
     }
 
     #[test]
