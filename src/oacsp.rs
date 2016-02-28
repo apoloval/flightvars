@@ -101,7 +101,8 @@ pub enum Message {
     Begin { version: u16, client_id: String },
     WriteLvar { lvar: String, value: i64 },
     WriteOffset { offset: Offset, value: i64 },
-    ObserveLvar { lvar: String }
+    ObserveLvar { lvar: String },
+    ObserveOffset { offset: Offset }
 }
 
 impl Message {
@@ -121,6 +122,10 @@ impl Message {
     pub fn obs_lvar(lvar: &str) -> Message {
         Message::ObserveLvar { lvar: lvar.to_string() }
     }
+
+    pub fn obs_offset(offset: Offset) -> Message {
+        Message::ObserveOffset { offset: offset }
+    }
 }
 
 impl fmt::Display for Message {
@@ -134,6 +139,8 @@ impl fmt::Display for Message {
                 write!(f, "WRITE_OFFSET {} {}", offset, value),
             &Message::ObserveLvar { ref lvar } =>
                 write!(f, "OBS_LVAR {}", lvar),
+            &Message::ObserveOffset { ref offset } =>
+                write!(f, "OBS_OFFSET {}", offset),
         }
     }
 }
@@ -164,6 +171,7 @@ impl<'a> MessageParser<'a> {
             "WRITE_LVAR" => self.parse_write_lvar(&args),
             "WRITE_OFFSET" => self.parse_write_offset(&args),
             "OBS_LVAR" => self.parse_obs_lvar(&args),
+            "OBS_OFFSET" => self.parse_obs_offset(&args),
             _ => Err(self.input_error()),
         }
     }
@@ -191,6 +199,11 @@ impl<'a> MessageParser<'a> {
     fn parse_obs_lvar(self, args: &[&str]) -> io::Result<Message> {
         try!(self.require_argc(args, 1));
         Ok(Message::obs_lvar(args[0]))
+    }
+
+    fn parse_obs_offset(self, args: &[&str]) -> io::Result<Message> {
+        try!(self.require_argc(args, 1));
+        Ok(Message::obs_offset(try!(args[0].parse())))
     }
 
     fn require_argc(&self, args: &[&str], expected: usize) -> io::Result<()> {
@@ -265,5 +278,19 @@ mod tests {
         let buf = "OBS_LVAR foobar";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::obs_lvar("foobar"));
+    }
+
+    #[test]
+    fn should_display_obs_offset_msg() {
+        let msg = Message::obs_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw));
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "OBS_OFFSET 1234:UW")
+    }
+
+    #[test]
+    fn should_parse_obs_offset_msg() {
+        let buf = "OBS_OFFSET 1234:UW";
+        let msg = Message::from_str(&buf).unwrap();
+        assert_eq!(msg, Message::obs_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw)));
     }
 }
