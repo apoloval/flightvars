@@ -103,7 +103,8 @@ pub enum Message {
     WriteOffset { offset: Offset, value: i64 },
     ObserveLvar { lvar: String },
     ObserveOffset { offset: Offset },
-    EventLvar { lvar: String, value: i64 }
+    EventLvar { lvar: String, value: i64 },
+    EventOffset { offset: OffsetAddr, value: i64 }
 }
 
 impl Message {
@@ -131,6 +132,10 @@ impl Message {
     pub fn event_lvar(lvar: &str, value: i64) -> Message {
         Message::EventLvar { lvar: lvar.to_string(), value: value }
     }
+
+    pub fn event_offset(offset: OffsetAddr, value: i64) -> Message {
+        Message::EventOffset { offset: offset, value: value }
+    }
 }
 
 impl fmt::Display for Message {
@@ -148,6 +153,8 @@ impl fmt::Display for Message {
                 write!(f, "OBS_OFFSET {}", offset),
             &Message::EventLvar { ref lvar, value } =>
                 write!(f, "EVENT_LVAR {} {}", lvar, value),
+            &Message::EventOffset { ref offset, value } =>
+                write!(f, "EVENT_OFFSET {} {}", offset, value),
         }
     }
 }
@@ -180,6 +187,7 @@ impl<'a> MessageParser<'a> {
             "OBS_LVAR" => self.parse_obs_lvar(&args),
             "OBS_OFFSET" => self.parse_obs_offset(&args),
             "EVENT_LVAR" => self.parse_event_lvar(&args),
+            "EVENT_OFFSET" => self.parse_event_offset(&args),
             _ => Err(self.input_error()),
         }
     }
@@ -219,6 +227,13 @@ impl<'a> MessageParser<'a> {
         let lvar = args[0];
         let value = try!(args[1].parse().map_err(|_| self.input_error()));
         Ok(Message::event_lvar(lvar, value))
+    }
+
+    fn parse_event_offset(self, args: &[&str]) -> io::Result<Message> {
+        try!(self.require_argc(args, 2));
+        let offset = try!(OffsetAddr::from_hex(args[0]).map_err(|_| self.input_error()));
+        let value = try!(args[1].parse().map_err(|_| self.input_error()));
+        Ok(Message::event_offset(offset, value))
     }
 
     fn require_argc(&self, args: &[&str], expected: usize) -> io::Result<()> {
@@ -321,5 +336,19 @@ mod tests {
         let buf = "EVENT_LVAR foobar 42";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::event_lvar("foobar", 42));
+    }
+
+    #[test]
+    fn should_display_event_offset_msg() {
+        let msg = Message::event_offset(OffsetAddr(0x1234), 42);
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "EVENT_OFFSET 1234 42")
+    }
+
+    #[test]
+    fn should_parse_event_offset_msg() {
+        let buf = "EVENT_OFFSET 1234 42";
+        let msg = Message::from_str(&buf).unwrap();
+        assert_eq!(msg, Message::event_offset(OffsetAddr(0x1234), 42));
     }
 }
