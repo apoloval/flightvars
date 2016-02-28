@@ -122,21 +122,6 @@ impl Message {
         Message::ObserveLvar { lvar: lvar.to_string() }
     }
 
-    pub fn decode<R: io::BufRead>(r: &mut R) -> io::Result<Message> {
-        let mut line = String::new();
-        try!(r.read_line(&mut line));
-        let args: Vec<&str> = line.split_whitespace().collect();
-        let cmd = args[0];
-        let args = &args[1..];
-        match &cmd.to_uppercase()[..] {
-            "BEGIN" => Message::decode_begin(&line, &args),
-            "WRITE_LVAR" => Message::decode_write_lvar(&line, &args),
-            "WRITE_OFFSET" => Message::decode_write_offset(&line, &args),
-            "OBS_LVAR" => Message::decode_obs_lvar(&line, &args),
-            _ => Err(Message::input_error(&line)),
-        }
-    }
-
     pub fn encode<W: io::Write>(&self, w: &mut W) -> io::Result<()> {
         match self {
             &Message::Begin { version, ref client_id } =>
@@ -149,46 +134,79 @@ impl Message {
                 write!(w, "OBS_LVAR {}\n", lvar),
         }
     }
+}
 
-    fn decode_begin(line: &str, args: &[&str]) -> io::Result<Message> {
-        try!(Message::require_argc(args, 2, line));
-        let ver = try!(args[0].parse().map_err(|_| Message::input_error(line)));
+impl FromStr for Message {
+    type Err = io::Error;
+    fn from_str(s: &str) -> Result<Message, io::Error> {
+        let deco = MessageParser::new(s);
+        deco.parse()
+    }
+}
+
+pub struct MessageParser<'a> {
+    input: &'a str
+}
+
+impl<'a> MessageParser<'a> {
+    pub fn new(input: &'a str) -> MessageParser {
+        MessageParser { input: input }
+    }
+
+    pub fn parse(self) -> io::Result<Message> {
+        let args: Vec<&str> = self.input.split_whitespace().collect();
+        let cmd = args[0];
+        let args = &args[1..];
+        match &cmd.to_uppercase()[..] {
+            "BEGIN" => self.parse_begin(&args),
+            "WRITE_LVAR" => self.parse_write_lvar(&args),
+            "WRITE_OFFSET" => self.parse_write_offset(&args),
+            "OBS_LVAR" => self.parse_obs_lvar(&args),
+            _ => Err(self.input_error()),
+        }
+    }
+
+    fn parse_begin(self, args: &[&str]) -> io::Result<Message> {
+        try!(self.require_argc(args, 2));
+        let ver = try!(args[0].parse().map_err(|_| self.input_error()));
         Ok(Message::begin(ver, args[1]))
     }
 
-    fn decode_write_lvar(line: &str, args: &[&str]) -> io::Result<Message> {
-        try!(Message::require_argc(args, 2, line));
+    fn parse_write_lvar(self, args: &[&str]) -> io::Result<Message> {
+        try!(self.require_argc(args, 2));
         let lvar = args[0];
-        let value = try!(args[1].parse().map_err(|_| Message::input_error(line)));
+        let value = try!(args[1].parse().map_err(|_| self.input_error()));
         Ok(Message::write_lvar(&lvar, value))
     }
 
-    fn decode_write_offset(line: &str, args: &[&str]) -> io::Result<Message> {
-        try!(Message::require_argc(args, 2, line));
+    fn parse_write_offset(self, args: &[&str]) -> io::Result<Message> {
+        try!(self.require_argc(args, 2));
         let offset = try!(args[0].parse());
-        let value = try!(args[1].parse().map_err(|_| Message::input_error(line)));
+        let value = try!(args[1].parse().map_err(|_| self.input_error()));
         Ok(Message::write_offset(offset, value))
     }
 
-    fn decode_obs_lvar(line: &str, args: &[&str]) -> io::Result<Message> {
-        try!(Message::require_argc(args, 1, line));
+    fn parse_obs_lvar(self, args: &[&str]) -> io::Result<Message> {
+        try!(self.require_argc(args, 1));
         Ok(Message::obs_lvar(args[0]))
     }
 
-    fn require_argc(args: &[&str], expected: usize, line: &str) -> io::Result<()> {
+    fn require_argc(&self, args: &[&str], expected: usize) -> io::Result<()> {
         if args.len() == expected { Ok(()) }
-        else { Err(Message::input_error(line)) }
+        else { Err(self.input_error()) }
     }
 
-    fn input_error(line: &str) -> io::Error {
+    fn input_error(&self) -> io::Error {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("invalid oacsp message in '{}'", line))
+            format!("invalid oacsp message in '{}'", self.input))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
@@ -201,8 +219,8 @@ mod tests {
 
     #[test]
     fn should_decode_begin_msg() {
-        let mut buf = &b"BEGIN 1 arduino\n"[..];
-        let msg = Message::decode(&mut buf).unwrap();
+        let buf = "BEGIN 1 arduino";
+        let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::begin(1, "arduino"));
     }
 
@@ -216,8 +234,8 @@ mod tests {
 
     #[test]
     fn should_decode_write_lvar_msg() {
-        let mut buf = &b"WRITE_LVAR foobar 42\n"[..];
-        let msg = Message::decode(&mut buf).unwrap();
+        let buf = "WRITE_LVAR foobar 42";
+        let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::write_lvar("foobar", 42));
     }
 
@@ -231,8 +249,8 @@ mod tests {
 
     #[test]
     fn should_decode_write_offset_msg() {
-        let mut buf = &b"WRITE_OFFSET 1234:UW 42\n"[..];
-        let msg = Message::decode(&mut buf).unwrap();
+        let buf = "WRITE_OFFSET 1234:UW 42";
+        let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42));
     }
 
@@ -246,8 +264,8 @@ mod tests {
 
     #[test]
     fn should_decode_obs_lvar_msg() {
-        let mut buf = &b"OBS_LVAR foobar\n"[..];
-        let msg = Message::decode(&mut buf).unwrap();
+        let buf = "OBS_LVAR foobar";
+        let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::obs_lvar("foobar"));
     }
 }
