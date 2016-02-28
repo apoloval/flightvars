@@ -39,31 +39,31 @@ impl fmt::Display for OffsetAddr {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum OffsetLength { Ub, Sb, Uw, Sw, Ud, Sd }
+pub enum OffsetLen { Ub, Sb, Uw, Sw, Ud, Sd }
 
-impl fmt::Display for OffsetLength {
+impl fmt::Display for OffsetLen {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            OffsetLength::Ub => write!(f, "UB"),
-            OffsetLength::Sb => write!(f, "SB"),
-            OffsetLength::Uw => write!(f, "UW"),
-            OffsetLength::Sw => write!(f, "SW"),
-            OffsetLength::Ud => write!(f, "UD"),
-            OffsetLength::Sd => write!(f, "SD"),
+            OffsetLen::Ub => write!(f, "UB"),
+            OffsetLen::Sb => write!(f, "SB"),
+            OffsetLen::Uw => write!(f, "UW"),
+            OffsetLen::Sw => write!(f, "SW"),
+            OffsetLen::Ud => write!(f, "UD"),
+            OffsetLen::Sd => write!(f, "SD"),
         }
     }
 }
 
-impl FromStr for OffsetLength {
+impl FromStr for OffsetLen {
     type Err = io::Error;
-    fn from_str(s: &str) -> Result<OffsetLength, io::Error> {
+    fn from_str(s: &str) -> Result<OffsetLen, io::Error> {
         match s {
-            "UB" => Ok(OffsetLength::Ub),
-            "SB" => Ok(OffsetLength::Sb),
-            "UW" => Ok(OffsetLength::Uw),
-            "SW" => Ok(OffsetLength::Sw),
-            "UD" => Ok(OffsetLength::Ud),
-            "SD" => Ok(OffsetLength::Sd),
+            "UB" => Ok(OffsetLen::Ub),
+            "SB" => Ok(OffsetLen::Sb),
+            "UW" => Ok(OffsetLen::Uw),
+            "SW" => Ok(OffsetLen::Sw),
+            "UD" => Ok(OffsetLen::Ud),
+            "SD" => Ok(OffsetLen::Sd),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("invalid FSUIPC offset length in '{}'", s))),
@@ -72,7 +72,7 @@ impl FromStr for OffsetLength {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Offset(OffsetAddr, OffsetLength);
+pub struct Offset(OffsetAddr, OffsetLen);
 
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -86,7 +86,7 @@ impl FromStr for Offset {
         let pair: Vec<&str> = s.split(":").collect();
         if pair.len() == 2 {
             let addr = try!(OffsetAddr::from_hex(pair[0]));
-            let len = try!(OffsetLength::from_str(pair[1]));
+            let len = try!(OffsetLen::from_str(pair[1]));
             Ok(Offset(addr, len))
         } else {
             Err(io::Error::new(
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn should_encode_write_offset_msg() {
         let mut buf = vec![];
-        let msg = Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLength::Uw), 42);
+        let msg = Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42);
         msg.encode(&mut buf).unwrap();
         assert_eq!(buf, b"WRITE_OFFSET 1234:UW 42\n")
     }
@@ -236,7 +236,7 @@ mod tests {
     fn should_decode_write_offset_msg() {
         let mut buf = &b"WRITE_OFFSET 1234:UW 42\n"[..];
         let msg = Message::decode(&mut buf).unwrap();
-        assert_eq!(msg, Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLength::Uw), 42));
+        assert_eq!(msg, Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42));
     }
 
     #[test]
