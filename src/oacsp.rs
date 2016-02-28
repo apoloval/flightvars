@@ -13,6 +13,9 @@ use std::str::FromStr;
 use byteorder::{BigEndian, ReadBytesExt};
 use hex::FromHex;
 
+/// The value of a data transferred using OACSP
+pub type Value = i32;
+
 #[derive(Debug, PartialEq)]
 pub struct OffsetAddr(u16);
 
@@ -99,12 +102,12 @@ impl FromStr for Offset {
 #[derive(Debug, PartialEq)]
 pub enum Message {
     Begin { version: u16, client_id: String },
-    WriteLvar { lvar: String, value: i64 },
-    WriteOffset { offset: Offset, value: i64 },
+    WriteLvar { lvar: String, value: Value },
+    WriteOffset { offset: Offset, value: Value },
     ObserveLvar { lvar: String },
     ObserveOffset { offset: Offset },
-    EventLvar { lvar: String, value: i64 },
-    EventOffset { offset: OffsetAddr, value: i64 }
+    EventLvar { lvar: String, value: Value },
+    EventOffset { offset: OffsetAddr, value: Value }
 }
 
 impl Message {
@@ -113,11 +116,11 @@ impl Message {
         Message::Begin { version: version, client_id: client_id.to_string() }
     }
 
-    pub fn write_lvar(lvar: &str, value: i64) -> Message {
+    pub fn write_lvar(lvar: &str, value: Value) -> Message {
         Message::WriteLvar { lvar: lvar.to_string(), value: value }
     }
 
-    pub fn write_offset(offset: Offset, value: i64) -> Message {
+    pub fn write_offset(offset: Offset, value: Value) -> Message {
         Message::WriteOffset { offset: offset, value: value }
     }
 
@@ -129,11 +132,11 @@ impl Message {
         Message::ObserveOffset { offset: offset }
     }
 
-    pub fn event_lvar(lvar: &str, value: i64) -> Message {
+    pub fn event_lvar(lvar: &str, value: Value) -> Message {
         Message::EventLvar { lvar: lvar.to_string(), value: value }
     }
 
-    pub fn event_offset(offset: OffsetAddr, value: i64) -> Message {
+    pub fn event_offset(offset: OffsetAddr, value: Value) -> Message {
         Message::EventOffset { offset: offset, value: value }
     }
 }
