@@ -118,17 +118,19 @@ impl Message {
 
     fn decode_begin<'a, I: Iterator<Item=&'a str>>(
             line: &str, args: &mut I) -> io::Result<Message> {
-        let version = try!(args.next().ok_or(Message::input_error(line)));
-        let client_id = try!(args.next().ok_or(Message::input_error(line)));
-        let version = try!(version.parse().map_err(|_| Message::input_error(line)));
+        let error = || Message::input_error(line);
+        let version = try!(args.next().ok_or_else(&error));
+        let client_id = try!(args.next().ok_or_else(&error));
+        let version = try!(version.parse().map_err(|_| error()));
         Ok(Message::begin(version, &client_id))
     }
 
     fn decode_write_lvar<'a, I: Iterator<Item=&'a str>>(
             line: &str, args: &mut I) -> io::Result<Message> {
-        let lvar = try!(args.next().ok_or(Message::input_error(line)));
-        let value = try!(args.next().ok_or(Message::input_error(line)));
-        let value = try!(value.parse().map_err(|_| Message::input_error(line)));
+        let error = || Message::input_error(line);
+        let lvar = try!(args.next().ok_or_else(&error));
+        let value = try!(args.next().ok_or_else(&error));
+        let value = try!(value.parse().map_err(|_| error()));
         Ok(Message::write_lvar(&lvar, value))
     }
 
