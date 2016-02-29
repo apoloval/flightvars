@@ -180,6 +180,10 @@ impl<'a> MessageParser<'a> {
     }
 
     pub fn parse(self) -> io::Result<Message> {
+        if self.input.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput, "cannot parse oacsp message from empty line"));
+        }
         let args: Vec<&str> = self.input.split_whitespace().collect();
         let cmd = args[0];
         let args = &args[1..];
@@ -248,6 +252,31 @@ impl<'a> MessageParser<'a> {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("invalid oacsp message in '{}'", self.input))
+    }
+}
+
+pub struct MessageIter<R: io::Read> {
+    input: io::BufReader<R>
+}
+
+impl<R: io::Read> MessageIter<R> {
+    fn new(input: R) -> MessageIter<R> {
+        MessageIter { input: io::BufReader::new(input) }
+    }
+}
+
+impl<R: io::Read> Iterator for MessageIter<R> {
+
+    type Item = io::Result<Message>;
+    fn next(&mut self) -> Option<io::Result<Message>> {
+        use std::io::BufRead;
+        let mut line = String::new();
+        match self.input.read_line(&mut line) {
+            Ok(0) => return None,
+            Err(e) => return Some(Err(e)),
+            _ => {},
+        }
+        Some(line.trim().parse())
     }
 }
 
@@ -353,5 +382,23 @@ mod tests {
         let buf = "EVENT_OFFSET 1234 42";
         let msg = Message::from_str(&buf).unwrap();
         assert_eq!(msg, Message::event_offset(OffsetAddr(0x1234), 42));
+    }
+
+    #[test]
+    fn should_fail_to_parse_empty_line() {
+        let buf = "";
+        assert!(Message::from_str(&buf).is_err());
+    }
+
+    #[test]
+    fn should_iterate_messages_from_read() {
+        let buf = b"BEGIN 1 arduino\nOBS_LVAR foobar\nwrong line\n\nEVENT_LVAR foobar 42";
+        let mut iter = MessageIter::new(&buf[..]);
+        assert_eq!(iter.next().unwrap().unwrap(), Message::begin(1, "arduino"));
+        assert_eq!(iter.next().unwrap().unwrap(), Message::obs_lvar("foobar"));
+        assert!(iter.next().unwrap().is_err());
+        assert!(iter.next().unwrap().is_err());
+        assert_eq!(iter.next().unwrap().unwrap(), Message::event_lvar("foobar", 42));
+        assert!(iter.next().is_none());
     }
 }
