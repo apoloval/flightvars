@@ -22,5 +22,6 @@ mod logging;
 #[cfg(windows)]
 mod fs;
 
+mod bus;
 mod io;
 mod oacsp;
