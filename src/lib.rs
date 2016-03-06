@@ -14,14 +14,21 @@ extern crate hex;
 extern crate libc;
 extern crate log4rs;
 
-// Only fs module is using `logging`.
-// Remove this conditional compilation when that's not true.
 #[cfg(windows)]
-mod logging;
-
-#[cfg(windows)]
-mod fs;
+mod fsx;
 
 mod bus;
 mod io;
 mod oacsp;
+
+#[cfg(windows)]
+#[export_name="\x01_DLLStart"]
+pub extern "stdcall" fn dll_start() {
+    fsx::module::start_module();
+}
+
+#[cfg(windows)]
+#[export_name="\x01_DLLStop"]
+pub extern "stdcall" fn dll_stop() {
+    fsx::module::stop_module();
+}

@@ -6,16 +6,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#[macro_use]
-extern crate log;
-
-extern crate libc;
-extern crate log4rs;
-
 use std::mem::size_of;
 use std::ptr;
 
 use libc::malloc;
+
+use fsx::logging;
 
 struct Module;
 
@@ -36,8 +32,7 @@ const FLIGHTVARS_VERSION: &'static str = "0.1.0";
 
 static mut MODULE: *mut Module = 0 as *mut Module;
 
-#[export_name="\x01_DLLStart"]
-pub extern "stdcall" fn dll_start() {
+pub fn start_module() {
     unsafe {
         MODULE = malloc(size_of::<Module>() as u32) as *mut Module;
         ptr::write(MODULE, Module::new());
@@ -45,8 +40,7 @@ pub extern "stdcall" fn dll_start() {
     }
 }
 
-#[export_name="\x01_DLLStop"]
-pub extern "stdcall" fn dll_stop() {
+pub fn stop_module() {
     unsafe {
         let m = ptr::read(MODULE);
         m.stop();
