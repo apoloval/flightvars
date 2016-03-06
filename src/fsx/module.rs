@@ -34,7 +34,7 @@ static mut MODULE: *mut Module = 0 as *mut Module;
 
 pub fn start_module() {
     unsafe {
-        MODULE = malloc(size_of::<Module>() as u32) as *mut Module;
+        MODULE = malloc(size_of::<Module>()) as *mut Module;
         ptr::write(MODULE, Module::new());
         (*MODULE).start();
     }
