@@ -15,6 +15,7 @@ extern crate log4rs;
 #[cfg(windows)] mod fsx;
 mod oacsp;
 mod util;
+mod comm;
 
 #[cfg(windows)]
 #[export_name="\x01_DLLStart"]
