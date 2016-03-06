@@ -17,7 +17,6 @@ extern crate log4rs;
 #[cfg(windows)]
 mod fsx;
 
-mod bus;
 mod io;
 mod oacsp;
 
