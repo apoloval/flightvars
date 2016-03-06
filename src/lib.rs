@@ -6,19 +6,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#[macro_use]
-extern crate log;
-
 extern crate byteorder;
 extern crate hex;
 extern crate libc;
+#[macro_use] extern crate log;
 extern crate log4rs;
 
-#[cfg(windows)]
-mod fsx;
-
-mod io;
+#[cfg(windows)] mod fsx;
 mod oacsp;
+mod util;
 
 #[cfg(windows)]
 #[export_name="\x01_DLLStart"]
