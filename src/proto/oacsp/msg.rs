@@ -260,7 +260,7 @@ pub struct MessageIter<R: io::Read> {
 }
 
 impl<R: io::Read> MessageIter<R> {
-    fn new(input: R) -> MessageIter<R> {
+    pub fn new(input: R) -> MessageIter<R> {
         MessageIter { input: io::BufReader::new(input) }
     }
 }
