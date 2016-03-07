@@ -49,7 +49,7 @@ impl io::Read for SplitRead {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         unsafe {
             let c_buf = buf as *mut [u8] as *mut libc::c_void;
-            let bytes_read = libc::read(self.socket.fd, c_buf, buf.len() as u64);
+            let bytes_read = libc::read(self.socket.fd, c_buf, buf.len());
             if bytes_read >= 0 { Ok(bytes_read as usize) }
             else {
                 Err(io::Error::new(
@@ -72,7 +72,7 @@ impl io::Write for SplitWrite {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         unsafe {
             let c_buf = buf as *const [u8] as *const libc::c_void;
-            let bytes_written = libc::write(self.socket.fd, c_buf, buf.len() as u64);
+            let bytes_written = libc::write(self.socket.fd, c_buf, buf.len());
             if bytes_written >= 0 { Ok(bytes_written as usize) }
             else { Err(io::Error::new(
                 io::ErrorKind::Other,
