@@ -10,9 +10,16 @@ use std::io;
 
 pub mod tcp;
 
+pub trait ShutdownHandle {
+    fn shutdown(self);
+}
+
 pub trait Transport {
     type Input;
     type Output;
+    type Shutdown : ShutdownHandle;
 
     fn wait_conn(&mut self) -> io::Result<(Self::Input, Self::Output)>;
+
+    fn shutdown_handle(&mut self) -> Self::Shutdown;
 }

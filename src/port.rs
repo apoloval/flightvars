@@ -84,13 +84,22 @@ mod tests {
         }
     }
 
+    struct FakeShutdownHandler;
+
+    impl comm::ShutdownHandle for FakeShutdownHandler {
+        fn shutdown(self) {}
+    }
+
     impl comm::Transport for FakeTransport {
         type Input = mpsc::Receiver<proto::Message>;
         type Output = ();
+        type Shutdown = FakeShutdownHandler;
 
         fn wait_conn(&mut self) -> io::Result<(mpsc::Receiver<proto::Message>, ())> {
             self.connections.pop().ok_or(io::Error::new(io::ErrorKind::ConnectionReset, ""))
         }
+
+        fn shutdown_handle(&mut self) -> FakeShutdownHandler { FakeShutdownHandler }
     }
 
     #[test]
@@ -99,7 +108,7 @@ mod tests {
         let (port_tx, port_rx) = mpsc::channel();
         net_tx.send(proto::Message::Open).unwrap();
         let transport = FakeTransport::new(net_rx);
-        let port = Port::new(transport, proto::id_proto(), port_tx);
+        let _port = Port::new(transport, proto::id_proto(), port_tx);
         assert_eq!(proto::Message::Open, port_rx.recv().unwrap());
     }
 }
