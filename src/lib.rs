@@ -15,6 +15,7 @@ extern crate log4rs;
 #[cfg(windows)] mod fsx;
 mod util;
 mod comm;
+mod port;
 mod proto;
 
 #[cfg(windows)]
