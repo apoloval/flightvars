@@ -26,3 +26,5 @@ impl<I: IntoIterator<Item=Message>> ProtocolRead<I> for IdentityProtocolRead {
     type IntoIter = I;
     fn iter_from(&self, input: I) -> I { input }
 }
+
+pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }

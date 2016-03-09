@@ -11,17 +11,6 @@ use std::net;
 
 use comm::Transport;
 
-pub struct Tcp {
-    listener: net::TcpListener
-}
-
-impl Tcp {
-    fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<Tcp> {
-        Ok(Tcp { listener: try!(net::TcpListener::bind(addr)) })
-    }
-}
-
-
 impl Transport for net::TcpListener {
     type Input = net::TcpStream;
     type Output = net::TcpStream;
@@ -43,25 +32,23 @@ mod tests {
 
     use comm::Transport;
 
-    use super::*;
-
     #[test]
     fn should_wait_conn() {
         let child = thread::spawn(|| {
             let mut listener = net::TcpListener::bind("127.0.0.1:1234").unwrap();
-            let (mut r, mut w) = listener.wait_conn().unwrap();
+            let (r, mut w) = listener.wait_conn().unwrap();
             let mut input = io::BufReader::new(r);
             let mut line = String::new();
-            input.read_line(&mut line);
+            input.read_line(&mut line).unwrap();
             assert_eq!(line, "Hello server\n");
-            w.write_all(b"Hello client\n");
+            w.write_all(b"Hello client\n").unwrap();
         });
         thread::sleep(time::Duration::from_millis(25));
         let mut conn = net::TcpStream::connect("127.0.0.1:1234").unwrap();
-        conn.write_all(b"Hello server\n");
+        conn.write_all(b"Hello server\n").unwrap();
         let mut input = io::BufReader::new(conn);
         let mut line = String::new();
-        input.read_line(&mut line);
+        input.read_line(&mut line).unwrap();
         assert_eq!(line, "Hello client\n");
         child.join().unwrap();
     }

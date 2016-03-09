@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::io;
+use std::net;
 use std::sync::mpsc;
 use std::thread;
 
@@ -53,12 +55,17 @@ where I: IntoIterator<Item=proto::Message> + Send + 'static {
     })
 }
 
+fn oacsp_tcp_port<A>(addr: A, incoming: mpsc::Sender<proto::Message>) -> io::Result<Port>
+where A: net::ToSocketAddrs {
+    let trans = try!(net::TcpListener::bind(addr));
+    let proto = proto::oacsp();
+    Ok(Port::new(trans, proto, incoming))
+}
+
 #[cfg(test)]
 mod tests {
     use std::io;
     use std::sync::mpsc;
-    use std::thread;
-    use std::time;
 
     use comm;
     use proto;
