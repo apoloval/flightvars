@@ -11,8 +11,8 @@ use std::io;
 pub mod tcp;
 
 pub trait Transport {
-    type Read: io::Read;
-    type Write: io::Write;
+    type Input;
+    type Output;
 
-    fn wait_conn(&mut self) -> io::Result<(Self::Read, Self::Write)>;
+    fn wait_conn(&mut self) -> io::Result<(Self::Input, Self::Output)>;
 }

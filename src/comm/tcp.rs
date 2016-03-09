@@ -23,8 +23,8 @@ impl Tcp {
 
 
 impl Transport for net::TcpListener {
-    type Read = net::TcpStream;
-    type Write = net::TcpStream;
+    type Input = net::TcpStream;
+    type Output = net::TcpStream;
 
     fn wait_conn(&mut self) -> io::Result<(net::TcpStream, net::TcpStream)> {
         let (read, _) = try!(self.accept());
