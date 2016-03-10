@@ -11,20 +11,32 @@ use std::net;
 use std::sync::mpsc;
 use std::thread;
 
+use comm;
 use comm::Transport;
 use proto;
 use proto::ProtocolRead;
 
-pub struct Port {
-    thread: thread::JoinHandle<()>
+pub struct Port<S: comm::ShutdownHandle> {
+    port_listener: thread::JoinHandle<()>,
+    shutdown: S
 }
 
-impl Port {
-    fn new<T, P>(trans: T, proto_read: P, chan: mpsc::Sender<proto::Message>) -> Port
-    where T: Transport + Send + 'static,
+impl<S: comm::ShutdownHandle> Port<S> {
+    fn new<T, P>(trans: T, proto_read: P, chan: mpsc::Sender<proto::Message>) -> Port<S>
+    where T: Transport<Shutdown=S> + Send + 'static,
           P: ProtocolRead<T::Input> + Send + 'static,
           P::IntoIter: Send {
-        Port { thread: spawn_port_listener(trans, proto_read, chan) }
+        let mut trans = trans;
+        let shutdown = trans.shutdown_handle();
+        Port {
+            port_listener: spawn_port_listener(trans, proto_read, chan),
+            shutdown: shutdown
+        }
+    }
+
+    fn shutdown(self) {
+        self.shutdown.shutdown();
+        self.port_listener.join().unwrap();
     }
 }
 
@@ -55,7 +67,7 @@ where I: IntoIterator<Item=proto::Message> + Send + 'static {
     })
 }
 
-fn oacsp_tcp_port<A>(addr: A, incoming: mpsc::Sender<proto::Message>) -> io::Result<Port>
+fn oacsp_tcp_port<A>(addr: A, incoming: mpsc::Sender<proto::Message>) -> io::Result<Port<comm::tcp::TcpShutdownHandler>>
 where A: net::ToSocketAddrs {
     let trans = try!(net::TcpListener::bind(addr));
     let proto = proto::oacsp();
@@ -108,7 +120,8 @@ mod tests {
         let (port_tx, port_rx) = mpsc::channel();
         net_tx.send(proto::Message::Open).unwrap();
         let transport = FakeTransport::new(net_rx);
-        let _port = Port::new(transport, proto::id_proto(), port_tx);
+        let port = Port::new(transport, proto::id_proto(), port_tx);
         assert_eq!(proto::Message::Open, port_rx.recv().unwrap());
+        port.shutdown();
     }
 }
