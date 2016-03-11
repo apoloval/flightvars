@@ -6,25 +6,33 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::io;
+use std::sync::mpsc;
+
 pub mod oacsp;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Message {
-    Open
+pub enum Message<F> {
+    Open,
+    WriteData(i32, F)
 }
 
-pub trait ProtocolRead<I> {
-    type IntoIter: IntoIterator<Item=Message>;
-    fn iter_from(&self, input: I) -> Self::IntoIter;
+pub type RawMessage = Message<()>;
+
+impl RawMessage {
+    pub fn map_origin(&self, origin: &mpsc::Sender<RawMessage>) -> MessageFrom {
+        match self {
+            &Message::Open => Message::Open,
+            &Message::WriteData(d, _) => Message::WriteData(d, origin.clone())
+        }
+    }
 }
 
-pub struct IdentityProtocolRead;
+pub type MessageFrom = Message<mpsc::Sender<RawMessage>>;
 
-pub fn id_proto() -> IdentityProtocolRead { IdentityProtocolRead }
-
-impl<I: IntoIterator<Item=Message>> ProtocolRead<I> for IdentityProtocolRead {
-    type IntoIter = I;
-    fn iter_from(&self, input: I) -> I { input }
+pub trait Protocol<R: io::Read> {
+    type Decoder: Iterator<Item=RawMessage>;
+    fn decode(&self, input: R) -> Self::Decoder;
 }
 
 pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }

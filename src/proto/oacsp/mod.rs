@@ -12,25 +12,24 @@ use proto::*;
 
 mod msg;
 
+#[derive(Clone)]
 pub struct Oacsp;
 
-impl<R: io::Read> ProtocolRead<R> for Oacsp {
-    type IntoIter = OacspIter<R>;
-    fn iter_from(&self, input: R) -> OacspIter<R> {
-        OacspIter { msg_input: msg::MessageIter::new(input) }
+impl<R: io::Read> Protocol<R> for Oacsp {
+    type Decoder = OacspDecoder<R>;
+    fn decode(&self, input: R) -> OacspDecoder<R> {
+        OacspDecoder { msg_input: msg::MessageIter::new(input) }
     }
 }
 
-struct OacspIter<R: io::Read> {
+struct OacspDecoder<R: io::Read> {
     msg_input: msg::MessageIter<R>
 }
 
-unsafe impl<R: io::Read> Send for OacspIter<R> {}
+impl<R: io::Read> Iterator for OacspDecoder<R> {
+    type Item = RawMessage;
 
-impl<R: io::Read> Iterator for OacspIter<R> {
-    type Item = Message;
-
-    fn next(&mut self) -> Option<Message> {
+    fn next(&mut self) -> Option<RawMessage> {
         match self.msg_input.next() {
             _ => None,
         }
