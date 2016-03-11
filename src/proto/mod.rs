@@ -14,6 +14,7 @@ pub mod oacsp;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message<F> {
     Open,
+    Close,
     WriteData(i32, F)
 }
 
@@ -23,6 +24,7 @@ impl RawMessage {
     pub fn map_origin(&self, origin: &mpsc::Sender<RawMessage>) -> MessageFrom {
         match self {
             &Message::Open => Message::Open,
+            &Message::Close => Message::Close,
             &Message::WriteData(d, _) => Message::WriteData(d, origin.clone())
         }
     }
@@ -38,15 +40,15 @@ pub trait MessageWrite {
     fn write_msg<F>(&mut self, msg: &Message<F>) -> io::Result<()>;
 }
 
-pub trait Protocol<R: io::Read, W: io::Write> {
+pub trait Protocol<I, O> {
     type Read: MessageRead;
     type Write: MessageWrite;
-    fn reader(&self, input: R) -> Self::Read;
-    fn writer(&self, output: W) -> Self::Write;
+    fn reader(&self, input: I) -> Self::Read;
+    fn writer(&self, output: O) -> Self::Write;
 }
 
-pub trait BidirProtocol<T: io::Read + io::Write> : Protocol<T, T> {}
+pub trait BidirProtocol<T> : Protocol<T, T> {}
 
-impl<T: io::Read + io::Write, P: Protocol<T, T>> BidirProtocol<T> for P {}
+impl<T, P: Protocol<T, T>> BidirProtocol<T> for P {}
 
 pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }

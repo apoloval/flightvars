@@ -15,7 +15,7 @@ use proto;
 
 #[allow(dead_code)]
 pub struct TcpPort {
-    worker: TcpWorker
+    worker: TcpWorker<TcpShutdownHandler>
 }
 
 impl TcpPort {
@@ -46,21 +46,28 @@ impl TcpPort {
     }
 }
 
-struct TcpWorker {
+struct TcpWorker<S> {
     thread: thread::JoinHandle<()>,
-    shutdown: TcpShutdownHandler,
+    shutdown: S,
 }
 
-impl TcpWorker {
+impl TcpWorker<TcpShutdownHandler> {
     pub fn shutdown(self) {
         self.shutdown.shutdown();
         self.thread.join().unwrap();
     }
 }
 
+impl TcpWorker<mpsc::Sender<proto::RawMessage>> {
+    pub fn shutdown(self) {
+        self.shutdown.send(proto::Message::Close);
+        self.thread.join().unwrap();
+    }
+}
+
 struct TcpConnection {
-    reader: TcpWorker,
-    writer: TcpWorker
+    reader: TcpWorker<TcpShutdownHandler>,
+    writer: TcpWorker<mpsc::Sender<proto::RawMessage>>
 }
 
 impl TcpConnection {
@@ -102,10 +109,10 @@ where P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
     let reader_stream = stream.try_clone().unwrap();
     let reader_shutdown = TcpShutdownHandler::from_stream(&reader_stream);
     let msg_reader = proto.reader(reader_stream);
-    let writer_stream = stream.try_clone().unwrap();
-    let writer_shutdown = TcpShutdownHandler::from_stream(&writer_stream);
-    let msg_writer = proto.writer(writer_stream);
     let (output_tx, output_rx) = mpsc::channel();
+    let writer_stream = stream.try_clone().unwrap();
+    let writer_shutdown = output_tx.clone();
+    let msg_writer = proto.writer(writer_stream);
     let reader = spawn_reader(msg_reader, input, output_tx);
     let writer = spawn_writer(msg_writer, output_rx);
     TcpConnection {
@@ -132,6 +139,9 @@ where W: proto::MessageWrite + Send + 'static {
     thread::spawn(move || {
         loop {
             let msg = output.recv().unwrap();
+            if msg == proto::Message::Close {
+                return;
+            }
             writer.write_msg(&msg).unwrap();
         }
     })
@@ -165,3 +175,17 @@ pub mod unix {
 }
 
 pub use self::unix::*;
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+
+    use super::*;
+
+    #[test]
+    fn should_open_and_close_port() {
+        let (tx, _) = mpsc::channel();
+        let port = TcpPort::oacsp("127.0.0.1:2345", tx).unwrap();
+        port.shutdown();
+    }
+}
