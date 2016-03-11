@@ -15,25 +15,67 @@ use proto;
 
 #[allow(dead_code)]
 pub struct TcpPort {
-    listener: thread::JoinHandle<()>
+    worker: TcpWorker
 }
 
 impl TcpPort {
-    #[allow(dead_code)]
-    pub fn new<A, P>(addr: A, input: mpsc::Sender<proto::MessageFrom>, proto: P) -> io::Result<TcpPort>
+    pub fn new<A, P>(addr: A,
+                     input: mpsc::Sender<proto::MessageFrom>,
+                     proto: P) -> io::Result<TcpPort>
     where A: net::ToSocketAddrs,
-          P: proto::Protocol<net::TcpStream> + Send + 'static,
-          P::Decoder: Send + 'static {
+          P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
+          P::Read: Send + 'static,
+          P::Write: Send + 'static {
         let listener = try!(net::TcpListener::bind(addr));
-        Ok(TcpPort { listener: spawn_listener(listener, input, proto) })
+        let shutdown = TcpShutdownHandler::from_listener(&listener);
+        Ok(TcpPort { worker: TcpWorker {
+            thread: spawn_listener(listener, input, proto),
+            shutdown: shutdown
+        }})
+    }
+
+    #[allow(dead_code)]
+    pub fn oacsp<A>(addr: A, input: mpsc::Sender<proto::MessageFrom>) -> io::Result<TcpPort>
+    where A: net::ToSocketAddrs {
+        Self::new(addr, input, proto::oacsp())
+    }
+
+    #[allow(dead_code)]
+    pub fn shutdown(self) {
+        self.worker.shutdown();
+    }
+}
+
+struct TcpWorker {
+    thread: thread::JoinHandle<()>,
+    shutdown: TcpShutdownHandler,
+}
+
+impl TcpWorker {
+    pub fn shutdown(self) {
+        self.shutdown.shutdown();
+        self.thread.join().unwrap();
+    }
+}
+
+struct TcpConnection {
+    reader: TcpWorker,
+    writer: TcpWorker
+}
+
+impl TcpConnection {
+    pub fn shutdown(self) {
+        self.reader.shutdown();
+        self.writer.shutdown();
     }
 }
 
 fn spawn_listener<P>(listener: net::TcpListener,
                      input: mpsc::Sender<proto::MessageFrom>,
                      proto: P) -> thread::JoinHandle<()>
-where P: proto::Protocol<net::TcpStream> + Send + 'static,
-      P::Decoder: Send + 'static {
+where P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
+      P::Read: Send + 'static,
+      P::Write: Send + 'static {
     thread::spawn(move || {
         let mut connections = vec![];
         loop {
@@ -42,55 +84,55 @@ where P: proto::Protocol<net::TcpStream> + Send + 'static,
                     let conn = spawn_connection(stream, input.clone(), &proto);
                     connections.push(conn);
                 },
-                Err(_) => return,
+                Err(_) => break,
             }
         }
+        for conn in connections {
+            conn.shutdown();
+        }
     })
-}
-
-struct TcpConnection {
-    reader: thread::JoinHandle<()>,
-    reader_shutdown: TcpShutdownHandler,
-    writer: thread::JoinHandle<()>,
-    writer_shutdown: TcpShutdownHandler
 }
 
 fn spawn_connection<P>(stream: net::TcpStream,
                        input: mpsc::Sender<proto::MessageFrom>,
                        proto: &P) -> TcpConnection
-where P: proto::Protocol<net::TcpStream> + Send + 'static,
-      P::Decoder: Send + 'static {
+where P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
+      P::Read: Send + 'static,
+      P::Write: Send + 'static {
     let reader_stream = stream.try_clone().unwrap();
     let reader_shutdown = TcpShutdownHandler::from_stream(&reader_stream);
-    let decoder = proto.decode(reader_stream);
+    let msg_reader = proto.reader(reader_stream);
     let writer_stream = stream.try_clone().unwrap();
     let writer_shutdown = TcpShutdownHandler::from_stream(&writer_stream);
+    let msg_writer = proto.writer(writer_stream);
     let (output_tx, output_rx) = mpsc::channel();
-    let reader = spawn_reader(decoder, input, output_tx);
-    let writer = spawn_writer(writer_stream, output_rx);
+    let reader = spawn_reader(msg_reader, input, output_tx);
+    let writer = spawn_writer(msg_writer, output_rx);
     TcpConnection {
-        reader: reader,
-        reader_shutdown: reader_shutdown,
-        writer: writer,
-        writer_shutdown: writer_shutdown
+        reader: TcpWorker { thread: reader, shutdown: reader_shutdown },
+        writer: TcpWorker { thread: writer, shutdown: writer_shutdown }
     }
 }
 
-fn spawn_reader<D>(decoder: D,
+fn spawn_reader<R>(mut reader: R,
                    input: mpsc::Sender<proto::MessageFrom>,
                    output: mpsc::Sender<proto::RawMessage>) -> thread::JoinHandle<()>
-where D: Iterator<Item=proto::RawMessage> + Send + 'static {
+where R: proto::MessageRead + Send + 'static {
     thread::spawn(move || {
-        for msg in decoder {
+        loop {
+            let msg = reader.read_msg().unwrap();
             input.send(msg.map_origin(&output)).unwrap();
         }
     })
 }
 
-fn spawn_writer(stream: net::TcpStream, output: mpsc::Receiver<proto::RawMessage>) -> thread::JoinHandle<()> {
+fn spawn_writer<W>(mut writer: W,
+                   output: mpsc::Receiver<proto::RawMessage>) -> thread::JoinHandle<()>
+where W: proto::MessageWrite + Send + 'static {
     thread::spawn(move || {
         loop {
-
+            let msg = output.recv().unwrap();
+            writer.write_msg(&msg).unwrap();
         }
     })
 }

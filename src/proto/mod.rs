@@ -30,9 +30,23 @@ impl RawMessage {
 
 pub type MessageFrom = Message<mpsc::Sender<RawMessage>>;
 
-pub trait Protocol<R: io::Read> {
-    type Decoder: Iterator<Item=RawMessage>;
-    fn decode(&self, input: R) -> Self::Decoder;
+pub trait MessageRead {
+    fn read_msg(&mut self) -> io::Result<RawMessage>;
 }
+
+pub trait MessageWrite {
+    fn write_msg<F>(&mut self, msg: &Message<F>) -> io::Result<()>;
+}
+
+pub trait Protocol<R: io::Read, W: io::Write> {
+    type Read: MessageRead;
+    type Write: MessageWrite;
+    fn reader(&self, input: R) -> Self::Read;
+    fn writer(&self, output: W) -> Self::Write;
+}
+
+pub trait BidirProtocol<T: io::Read + io::Write> : Protocol<T, T> {}
+
+impl<T: io::Read + io::Write, P: Protocol<T, T>> BidirProtocol<T> for P {}
 
 pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }

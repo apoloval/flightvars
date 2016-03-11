@@ -15,23 +15,42 @@ mod msg;
 #[derive(Clone)]
 pub struct Oacsp;
 
-impl<R: io::Read> Protocol<R> for Oacsp {
-    type Decoder = OacspDecoder<R>;
-    fn decode(&self, input: R) -> OacspDecoder<R> {
-        OacspDecoder { msg_input: msg::MessageIter::new(input) }
+impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
+    type Read = OacspReader<R>;
+    type Write = OacspWriter<W>;
+
+    fn reader(&self, input: R) -> OacspReader<R> {
+        OacspReader { input: io::BufReader::new(input) }
+    }
+
+    fn writer(&self, output: W) ->OacspWriter<W> {
+        OacspWriter { output: output }
     }
 }
 
-struct OacspDecoder<R: io::Read> {
-    msg_input: msg::MessageIter<R>
+pub struct OacspReader<R: io::Read> {
+    input: io::BufReader<R>
 }
 
-impl<R: io::Read> Iterator for OacspDecoder<R> {
-    type Item = RawMessage;
+impl<R: io::Read> MessageRead for OacspReader<R> {
+    fn read_msg(&mut self) -> io::Result<RawMessage> {
+        use std::io::BufRead;
+        use self::msg::*;
+        let mut line = String::new();
+        let msg: io::Result<msg::Message> = match self.input.read_line(&mut line) {
+            Ok(_) => line.trim().parse(),
+            Err(e) => Err(e),
+        };
+        unimplemented!()
+    }
+}
 
-    fn next(&mut self) -> Option<RawMessage> {
-        match self.msg_input.next() {
-            _ => None,
-        }
+pub struct OacspWriter<W: io::Write> {
+    output: W
+}
+
+impl<W: io::Write> MessageWrite for OacspWriter<W> {
+    fn write_msg<F>(&mut self, msg: &Message<F>) -> io::Result<()> {
+        unimplemented!()
     }
 }
