@@ -16,7 +16,7 @@ pub struct TcpTransport {
 }
 
 impl TcpTransport {
-    fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpTransport> {
+    pub fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpTransport> {
         Ok(TcpTransport { listener: try!(net::TcpListener::bind(addr)) })
     }
 }
@@ -97,13 +97,13 @@ mod tests {
     use std::thread;
     use std::time;
 
-    use comm::{ShutdownHandle, Transport};
+    use comm::*;
 
     #[test]
     fn should_wait_conn() {
         let child = thread::spawn(|| {
             let mut listener = net::TcpListener::bind("127.0.0.1:1234").unwrap();
-            let (r, mut w) = listener.wait_conn().unwrap();
+            let (r, mut w) = listener.listen().unwrap();
             let mut input = io::BufReader::new(r);
             let mut line = String::new();
             input.read_line(&mut line).unwrap();
@@ -123,12 +123,12 @@ mod tests {
     #[test]
     fn should_close_from_shutdown_handle() {
         let mut listener = net::TcpListener::bind("127.0.0.1:1235").unwrap();
-        let handle = listener.shutdown_handle();
+        let interruption = listener.shutdown_interruption();
         let child = thread::spawn(move || {
-            assert_eq!(listener.wait_conn().unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
+            assert_eq!(listener.listen().unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
         });
         thread::sleep(time::Duration::from_millis(25));
-        handle.shutdown();
+        interruption.interrupt();
         child.join().unwrap();
     }
 }
