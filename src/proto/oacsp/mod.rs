@@ -50,7 +50,7 @@ pub struct OacspWriter<W: io::Write> {
 }
 
 impl<W: io::Write> MessageWrite for OacspWriter<W> {
-    fn write_msg<F>(&mut self, msg: &Message<F>) -> io::Result<()> {
+    fn write_msg(&mut self, msg: &RawMessage) -> io::Result<()> {
         unimplemented!()
     }
 }

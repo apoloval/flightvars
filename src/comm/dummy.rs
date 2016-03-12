@@ -22,8 +22,8 @@ pub enum ListenerEvent<M> {
 }
 
 pub struct Channel<T> {
-    tx: mpsc::Sender<T>,
-    rx: mpsc::Receiver<T>
+    pub tx: mpsc::Sender<T>,
+    pub rx: mpsc::Receiver<T>
 }
 
 pub type StreamEventChannel<M> = Channel<StreamEvent<M>>;
@@ -37,11 +37,14 @@ impl<M> ShutdownInterruption for Channel<M> where mpsc::Sender<M>: Interrupt {
     }
 }
 
-impl<M> Interrupt for mpsc::Sender<StreamEvent<M>> {
+pub type StreamInterruptor<M> = mpsc::Sender<StreamEvent<M>>;
+pub type ListenerInterruptor<M> = mpsc::Sender<ListenerEvent<M>>;
+
+impl<M> Interrupt for StreamInterruptor<M> {
     fn interrupt(self) { self.send(StreamEvent::Shutdown).unwrap(); }
 }
 
-impl<M> Interrupt for mpsc::Sender<ListenerEvent<M>> {
+impl<M> Interrupt for ListenerInterruptor<M> {
     fn interrupt(self) { self.send(ListenerEvent::Shutdown).unwrap(); }
 }
 

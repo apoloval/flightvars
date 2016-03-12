@@ -10,6 +10,7 @@ use std::io;
 use std::sync::mpsc;
 
 pub mod oacsp;
+pub mod dummy;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Message<F> {
@@ -37,7 +38,7 @@ pub trait MessageRead {
 }
 
 pub trait MessageWrite {
-    fn write_msg<F>(&mut self, msg: &Message<F>) -> io::Result<()>;
+    fn write_msg(&mut self, msg: &RawMessage) -> io::Result<()>;
 }
 
 pub trait Protocol<I, O> {
@@ -52,3 +53,4 @@ pub trait BidirProtocol<T> : Protocol<T, T> {}
 impl<T, P: Protocol<T, T>> BidirProtocol<T> for P {}
 
 pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }
+pub fn dummy() -> dummy::DummyProtocol { dummy::DummyProtocol }
