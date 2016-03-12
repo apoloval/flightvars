@@ -9,6 +9,7 @@
 use std::io;
 
 pub mod tcp;
+pub mod dummy;
 
 pub trait Interrupt {
     fn interrupt(self);
