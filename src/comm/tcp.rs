@@ -9,21 +9,50 @@
 use std::io;
 use std::net;
 
-use comm::Transport;
+use comm::*;
 
-impl Transport for net::TcpListener {
+pub struct TcpTransport {
+    listener: net::TcpListener
+}
+
+impl TcpTransport {
+    fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpTransport> {
+        Ok(TcpTransport { listener: try!(net::TcpListener::bind(addr)) })
+    }
+}
+
+impl Transport for TcpTransport {
     type Input = net::TcpStream;
     type Output = net::TcpStream;
-    type Shutdown = TcpShutdownHandler;
+    type Listener = net::TcpListener;
 
-    fn wait_conn(&mut self) -> io::Result<(net::TcpStream, net::TcpStream)> {
-        let (read, _) = try!(self.accept());
-        let write = try!(read.try_clone());
-        Ok((read, write))
+    fn listener(&mut self) -> &mut net::TcpListener {
+        &mut self.listener
     }
+}
 
-    fn shutdown_handle(&mut self) -> Self::Shutdown {
-        TcpShutdownHandler::from_listener(&self)
+impl Listen<net::TcpStream, net::TcpStream> for net::TcpListener {
+    fn listen(&mut self) -> io::Result<(net::TcpStream, net::TcpStream)> {
+        let (conn, _) = try!(self.accept());
+        let input = try!(conn.try_clone());
+        let output = conn;
+        Ok((input, output))
+    }
+}
+
+impl ShutdownInterruption for net::TcpListener {
+    type Int = TcpInterruptor;
+
+    fn shutdown_interruption(&mut self) -> TcpInterruptor {
+        TcpInterruptor::from_listener(self)
+    }
+}
+
+impl ShutdownInterruption for net::TcpStream {
+    type Int = TcpInterruptor;
+
+    fn shutdown_interruption(&mut self) -> TcpInterruptor {
+        TcpInterruptor::from_stream(self)
     }
 }
 
@@ -34,20 +63,24 @@ pub mod unix {
 
     use libc;
 
-    use comm::ShutdownHandle;
+    use comm::*;
 
-    pub struct TcpShutdownHandler {
+    pub struct TcpInterruptor {
         fd: RawFd
     }
 
-    impl TcpShutdownHandler {
-        pub fn from_listener(listener: &net::TcpListener) -> TcpShutdownHandler {
-            TcpShutdownHandler { fd: listener.as_raw_fd() }
+    impl TcpInterruptor {
+        pub fn from_listener(listener: &net::TcpListener) -> TcpInterruptor {
+            TcpInterruptor { fd: listener.as_raw_fd() }
+        }
+
+        pub fn from_stream(stream: &net::TcpStream) -> TcpInterruptor {
+            TcpInterruptor { fd: stream.as_raw_fd() }
         }
     }
 
-    impl ShutdownHandle for TcpShutdownHandler {
-        fn shutdown(self) {
+    impl Interrupt for TcpInterruptor {
+        fn interrupt(self) {
             unsafe { libc::close(self.fd); }
         }
     }
