@@ -16,13 +16,25 @@ pub enum StreamEvent<M> {
     Shutdown
 }
 
-pub type StreamEventSender<M> = mpsc::Sender<StreamEvent<M>>;
+pub struct StreamEventSender<M>(mpsc::Sender<StreamEvent<M>>);
+
+impl<M> StreamEventSender<M> {
+    pub fn send(&self, msg: M) { self.0.send(StreamEvent::Message(msg)).unwrap() }
+}
 
 impl<M> Interrupt for StreamEventSender<M> {
-    fn interrupt(self) { self.send(StreamEvent::Shutdown).unwrap() }
+    fn interrupt(self) { self.0.send(StreamEvent::Shutdown).unwrap() }
 }
 
 pub type StreamEventReceiver<M> = mpsc::Receiver<StreamEvent<M>>;
+
+pub struct MessageSender<M>(mpsc::Sender<M>);
+
+pub struct MessageReceiver<M>(mpsc::Receiver<M>);
+
+impl<M> MessageReceiver<M> {
+    pub fn recv(&self) -> M { self.0.recv().unwrap() }
+}
 
 pub enum ListenerEvent<M> {
     Accept((DummyTransportInput<M>, DummyTransportOutput<M>)),
@@ -33,7 +45,7 @@ pub enum ListenerEvent<M> {
 pub struct ListenerEventSender<M>(mpsc::Sender<ListenerEvent<M>>);
 
 impl<M> ListenerEventSender<M> {
-    pub fn new_connection(&self) -> (StreamEventSender<M>, StreamEventReceiver<M>) {
+    pub fn new_connection(&self) -> (StreamEventSender<M>, MessageReceiver<M>) {
         let (input, in_tx) = DummyTransportInput::new();
         let (output, out_rx) = DummyTransportOutput::new();
         self.0.send(ListenerEvent::Accept((input, output))).unwrap();
@@ -63,8 +75,11 @@ pub struct DummyTransportInput<M> {
 impl<M> DummyTransportInput<M> {
     pub fn new() -> (DummyTransportInput<M>, StreamEventSender<M>) {
         let (tx, rx) = mpsc::channel();
-        let tx_out = tx.clone();
-        let input = DummyTransportInput { tx: tx, rx: rx };
+        let tx_out = StreamEventSender(tx.clone());
+        let input = DummyTransportInput {
+            tx: StreamEventSender(tx),
+            rx: rx
+        };
         (input, tx_out)
     }
 
@@ -73,22 +88,24 @@ impl<M> DummyTransportInput<M> {
 
 impl<M> ShutdownInterruption for DummyTransportInput<M> {
     type Int = StreamEventSender<M>;
-    fn shutdown_interruption(&mut self) -> StreamEventSender<M> { self.tx.clone() }
+    fn shutdown_interruption(&mut self) -> StreamEventSender<M> {
+        StreamEventSender(self.tx.0.clone())
+    }
 }
 
 pub struct DummyTransportOutput<M> {
-    tx: StreamEventSender<M>
+    tx: MessageSender<M>
 }
 
 impl<M> DummyTransportOutput<M> {
-    pub fn new() -> (DummyTransportOutput<M>, StreamEventReceiver<M>) {
+    pub fn new() -> (DummyTransportOutput<M>, MessageReceiver<M>) {
         let (tx, rx) = mpsc::channel();
-        let output = DummyTransportOutput { tx: tx };
-        (output, rx)
+        let output = DummyTransportOutput { tx: MessageSender(tx) };
+        (output, MessageReceiver(rx))
     }
 
     pub fn send(&self, msg: M) {
-        self.tx.send(StreamEvent::Message(msg)).unwrap()
+        self.tx.0.send(msg);
     }
 }
 

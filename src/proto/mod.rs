@@ -26,7 +26,7 @@ impl RawMessage {
         match self {
             &Message::Open => Message::Open,
             &Message::Close => Message::Close,
-            &Message::WriteData(d, _) => Message::WriteData(d, origin.clone())
+            &Message::WriteData(d, _) => Message::WriteData(d, origin.clone()),
         }
     }
 }
@@ -35,6 +35,23 @@ pub type RawMessageSender = mpsc::Sender<RawMessage>;
 pub type RawMessageReceiver = mpsc::Receiver<RawMessage>;
 
 pub type MessageFrom = Message<mpsc::Sender<RawMessage>>;
+
+impl MessageFrom {
+    pub fn origin(&self) -> Option<&mpsc::Sender<RawMessage>> {
+        match self {
+            &Message::WriteData(_, ref origin) => Some(origin),
+            _ => None,
+        }
+    }
+
+    pub fn to_raw(&self) -> RawMessage {
+        match self {
+            &Message::Open => Message::Open,
+            &Message::Close => Message::Close,
+            &Message::WriteData(d, _) => Message::WriteData(d, ()),
+        }
+    }
+}
 
 pub trait MessageRead {
     fn read_msg(&mut self) -> io::Result<RawMessage>;

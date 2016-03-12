@@ -47,7 +47,7 @@ impl TcpPort {
 pub type DummyPort = Port<comm::dummy::ListenerEventSender<proto::RawMessage>>;
 pub type DummyPortListener = comm::dummy::ListenerEventSender<proto::RawMessage>;
 pub type DummyPortInput = comm::dummy::StreamEventSender<proto::RawMessage>;
-pub type DummyPortOutput = comm::dummy::StreamEventReceiver<proto::RawMessage>;
+pub type DummyPortOutput = comm::dummy::MessageReceiver<proto::RawMessage>;
 
 impl DummyPort {
     pub fn new(domain_tx: mpsc::Sender<proto::MessageFrom>) -> DummyPort {
@@ -194,6 +194,7 @@ where W: proto::MessageWrite + Send + 'static {
 mod tests {
     use std::sync::mpsc;
 
+    use proto;
     use super::*;
 
     #[test]
@@ -207,7 +208,30 @@ mod tests {
     fn should_open_and_close_with_connections_established() {
         let (tx, _) = mpsc::channel();
         let port = DummyPort::new(tx);
-        let (_conn_tx, _conn_rx) = port.new_connection();
+        let (_, _) = port.new_connection();
+        port.shutdown();
+    }
+
+    #[test]
+    fn should_read_from_connection() {
+        let (tx, rx) = mpsc::channel();
+        let port = DummyPort::new(tx);
+        let (conn_tx, _) = port.new_connection();
+        conn_tx.send(proto::Message::Open);
+        assert_eq!(rx.recv().unwrap().to_raw(), proto::Message::Open);
+        port.shutdown();
+    }
+
+    #[test]
+    fn should_write_into_connection() {
+        let (tx, rx) = mpsc::channel();
+        let port = DummyPort::new(tx);
+        let (conn_tx, conn_rx) = port.new_connection();
+        conn_tx.send(proto::Message::WriteData(42, ()));
+        let req = rx.recv().unwrap();
+        let origin = req.origin().unwrap();
+        origin.send(proto::Message::Open).unwrap();
+        assert_eq!(conn_rx.recv(), proto::Message::Open);
         port.shutdown();
     }
 }
