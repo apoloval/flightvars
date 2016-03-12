@@ -160,7 +160,17 @@ fn spawn_reader<R>(mut reader: R,
 where R: proto::MessageRead + Send + 'static {
     thread::spawn(move || {
         loop {
-            let msg = reader.read_msg().unwrap();
+            let msg = match reader.read_msg() {
+                Ok(msg) => msg,
+                Err(ref e) if e.kind() == io::ErrorKind::ConnectionReset => {
+                    info!("connection reset: terminating reader thread");
+                    return;
+                },
+                Err(ref e) => {
+                    error!("unexpected error ocurred, terminating reader thread: {}", e);
+                    return;
+                },
+            };
             input.send(msg.map_origin(&output)).unwrap();
         }
     })
@@ -197,7 +207,7 @@ mod tests {
     fn should_open_and_close_with_connections_established() {
         let (tx, _) = mpsc::channel();
         let port = DummyPort::new(tx);
-        //listen.send
+        let (_conn_tx, _conn_rx) = port.new_connection();
         port.shutdown();
     }
 }
