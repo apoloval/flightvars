@@ -26,7 +26,7 @@ impl<M> Interrupt for StreamEventSender<M> {
     fn interrupt(self) { self.0.send(StreamEvent::Shutdown).unwrap() }
 }
 
-pub type StreamEventReceiver<M> = mpsc::Receiver<StreamEvent<M>>;
+pub struct StreamEventReceiver<M>(mpsc::Receiver<StreamEvent<M>>);
 
 pub struct MessageSender<M>(mpsc::Sender<M>);
 
@@ -78,12 +78,12 @@ impl<M> DummyTransportInput<M> {
         let tx_out = StreamEventSender(tx.clone());
         let input = DummyTransportInput {
             tx: StreamEventSender(tx),
-            rx: rx
+            rx: StreamEventReceiver(rx)
         };
         (input, tx_out)
     }
 
-    pub fn recv(&self) -> StreamEvent<M> { self.rx.recv().unwrap() }
+    pub fn recv(&self) -> StreamEvent<M> { self.rx.0.recv().unwrap() }
 }
 
 impl<M> ShutdownInterruption for DummyTransportInput<M> {
