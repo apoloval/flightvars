@@ -20,9 +20,11 @@ pub struct Port<I: comm::Interrupt> {
     worker: Worker<I>
 }
 
-impl Port<comm::tcp::TcpInterruptor> {
+pub type TcpPort = Port<comm::tcp::TcpInterruptor>;
+
+impl TcpPort {
     pub fn tcp<A, P>(addr: A,
-                     input: mpsc::Sender<proto::MessageFrom>,
+                     domain_tx: mpsc::Sender<proto::MessageFrom>,
                      proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs,
           P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
@@ -31,7 +33,7 @@ impl Port<comm::tcp::TcpInterruptor> {
         let mut transport = try!(comm::tcp::TcpTransport::bind(addr));
         let interruption = transport.listener().shutdown_interruption();
         Ok(Port { worker: Worker {
-            thread: spawn_listener(transport, input, proto),
+            thread: spawn_listener(transport, domain_tx, proto),
             interruption: interruption
         }})
     }
@@ -40,6 +42,30 @@ impl Port<comm::tcp::TcpInterruptor> {
     where A: net::ToSocketAddrs {
         Self::tcp(addr, input, proto::oacsp())
     }
+}
+
+pub type DummyPort = Port<comm::dummy::ListenerEventSender<proto::RawMessage>>;
+pub type DummyPortListener = comm::dummy::ListenerEventSender<proto::RawMessage>;
+pub type DummyPortInput = comm::dummy::StreamEventSender<proto::RawMessage>;
+pub type DummyPortOutput = comm::dummy::StreamEventReceiver<proto::RawMessage>;
+
+impl DummyPort {
+    pub fn new(domain_tx: mpsc::Sender<proto::MessageFrom>) -> DummyPort {
+        let listener = comm::dummy::DummyTransportListener::new();
+        let mut transport = comm::dummy::DummyTransport::new(listener);
+        let interruption = transport.listener().shutdown_interruption();
+        let protocol = proto::dummy();
+        let port = Port { worker: Worker {
+            thread: spawn_listener(transport, domain_tx, protocol),
+            interruption: interruption
+        }};
+        port
+    }
+
+    pub fn new_connection(&self) -> (DummyPortInput, DummyPortOutput) {
+        self.worker.interruption.new_connection()
+    }
+
 }
 
 impl<I: comm::Interrupt> Port<I> {
@@ -163,7 +189,15 @@ mod tests {
     #[test]
     fn should_open_and_close_port() {
         let (tx, _) = mpsc::channel();
-        let port = Port::tcp_oacsp("127.0.0.1:2345", tx).unwrap();
+        let port = DummyPort::new(tx);
+        port.shutdown();
+    }
+
+    #[test]
+    fn should_open_and_close_with_connections_established() {
+        let (tx, _) = mpsc::channel();
+        let port = DummyPort::new(tx);
+        //listen.send
         port.shutdown();
     }
 }

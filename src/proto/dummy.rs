@@ -12,30 +12,31 @@ use std::sync::mpsc;
 use comm::dummy;
 use proto;
 
-pub type Stream = dummy::StreamEventChannel<proto::RawMessage>;
-
 pub struct DummyProtocol;
 
-impl proto::Protocol<Stream, Stream> for DummyProtocol {
+pub type DummyProtocolInput = dummy::DummyTransportInput<proto::RawMessage>;
+pub type DummyProtocolOutput = dummy::DummyTransportOutput<proto::RawMessage>;
+
+impl proto::Protocol<DummyProtocolInput, DummyProtocolOutput> for DummyProtocol {
     type Read = MessageReader;
     type Write = MessageWriter;
 
-    fn reader(&self, input: Stream) -> Self::Read {
-        MessageReader { rx: input.rx }
+    fn reader(&self, input: DummyProtocolInput) -> Self::Read {
+        MessageReader { input: input }
     }
 
-    fn writer(&self, output: Stream) -> Self::Write {
-        MessageWriter { tx: output.tx }
+    fn writer(&self, output: DummyProtocolOutput) -> Self::Write {
+        MessageWriter { output: output }
     }
 }
 
 pub struct MessageReader {
-    rx: mpsc::Receiver<dummy::StreamEvent<proto::RawMessage>>
+    input: DummyProtocolInput
 }
 
 impl proto::MessageRead for MessageReader {
     fn read_msg(&mut self) -> io::Result<proto::RawMessage> {
-        match self.rx.recv().unwrap() {
+        match self.input.recv() {
             dummy::StreamEvent::Message(msg) => Ok(msg),
             dummy::StreamEvent::Shutdown => Err(io::Error::new(
                 io::ErrorKind::Interrupted, "connection interrupted")),
@@ -44,12 +45,12 @@ impl proto::MessageRead for MessageReader {
 }
 
 pub struct MessageWriter {
-    tx: mpsc::Sender<dummy::StreamEvent<proto::RawMessage>>
+    output: DummyProtocolOutput
 }
 
 impl proto::MessageWrite for MessageWriter {
     fn write_msg(&mut self, msg: &proto::RawMessage) -> io::Result<()> {
-        self.tx.send(dummy::StreamEvent::Message(msg.clone())).unwrap();
+        self.output.send(msg.clone());
         Ok(())
     }
 }

@@ -31,6 +31,9 @@ impl RawMessage {
     }
 }
 
+pub type RawMessageSender = mpsc::Sender<RawMessage>;
+pub type RawMessageReceiver = mpsc::Receiver<RawMessage>;
+
 pub type MessageFrom = Message<mpsc::Sender<RawMessage>>;
 
 pub trait MessageRead {
