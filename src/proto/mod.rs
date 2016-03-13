@@ -12,54 +12,104 @@ use std::sync::mpsc;
 pub mod oacsp;
 pub mod dummy;
 
+pub type Domain = String;
+
 #[derive(Clone, Debug, PartialEq)]
-pub enum Message<F> {
-    Open,
+pub enum Var {
+    Name(String),
+    Offset(u16),
+}
+
+impl Var {
+    pub fn name(n: &str) -> Var { Var::Name(n.to_string()) }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Value {
+    Bool(bool),
+    Int(i32),
+    Float(f32),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Request<T> {
+    Observe(Domain, Var, T),
+    Write(Domain, Var, Value),
     Close,
-    WriteData(i32, F)
 }
 
-pub type RawMessage = Message<()>;
-
-impl RawMessage {
-    pub fn map_origin(&self, origin: &mpsc::Sender<RawMessage>) -> MessageFrom {
-        match self {
-            &Message::Open => Message::Open,
-            &Message::Close => Message::Close,
-            &Message::WriteData(d, _) => Message::WriteData(d, origin.clone()),
-        }
+impl<T> Request<T> {
+    pub fn observe(domain: &str, var: Var, observer: T) -> Request<T> {
+        Request::Observe(domain.to_string(), var, observer)
     }
-}
 
-pub type RawMessageSender = mpsc::Sender<RawMessage>;
-pub type RawMessageReceiver = mpsc::Receiver<RawMessage>;
+    pub fn write(domain: &str, var: Var, val: Value) -> Request<T> {
+        Request::Write(domain.to_string(), var, val)
+    }
 
-pub type MessageFrom = Message<mpsc::Sender<RawMessage>>;
-
-impl MessageFrom {
-    pub fn origin(&self) -> Option<&mpsc::Sender<RawMessage>> {
+    pub fn observer(&self) -> Option<&T> {
         match self {
-            &Message::WriteData(_, ref origin) => Some(origin),
+            &Request::Observe(_, _, ref observer) => Some(observer),
             _ => None,
         }
     }
+}
 
-    pub fn to_raw(&self) -> RawMessage {
+pub type RawRequest = Request<()>;
+
+impl RawRequest {
+    pub fn with_observer(self, observer: &EventSender) -> DomainRequest {
         match self {
-            &Message::Open => Message::Open,
-            &Message::Close => Message::Close,
-            &Message::WriteData(d, _) => Message::WriteData(d, ()),
+            Request::Observe(dom, var, _) => Request::Observe(dom, var, observer.clone()),
+            Request::Write(dom, var, val) => Request::Write(dom, var, val),
+            Request::Close => Request::Close,
         }
     }
 }
 
-pub trait MessageRead {
-    fn read_msg(&mut self) -> io::Result<RawMessage>;
+pub type DomainRequest = Request<EventSender>;
+
+impl DomainRequest {
+    pub fn into_raw(self) -> RawRequest {
+        match self {
+            Request::Observe(dom, var, _) => Request::Observe(dom, var, ()),
+            Request::Write(dom, var, val) => Request::Write(dom, var, val),
+            Request::Close => Request::Close,
+        }
+    }
 }
 
-pub trait MessageWrite {
-    fn write_msg(&mut self, msg: &RawMessage) -> io::Result<()>;
+pub type RawRequestSender = mpsc::Sender<RawRequest>;
+pub type RawRequestReceiver = mpsc::Receiver<RawRequest>;
+pub type DomainRequestSender = mpsc::Sender<DomainRequest>;
+pub type DomainRequestReceiver = mpsc::Receiver<DomainRequest>;
+
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Event {
+    Update(Domain, Var, Value),
+    Close,
 }
+
+impl Event {
+    pub fn update(domain: &str, var: Var, val: Value) -> Event {
+        Event::Update(domain.to_string(), var, val)
+    }
+}
+
+pub type EventSender = mpsc::Sender<Event>;
+pub type EventReceiver = mpsc::Receiver<Event>;
+
+
+pub trait MessageRead {
+    fn read_msg(&mut self) -> io::Result<RawRequest>;
+}
+
+
+pub trait MessageWrite {
+    fn write_msg(&mut self, msg: &Event) -> io::Result<()>;
+}
+
 
 pub trait Protocol<I, O> {
     type Read: MessageRead;

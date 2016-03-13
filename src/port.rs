@@ -24,7 +24,7 @@ pub type TcpPort = Port<comm::tcp::TcpInterruptor>;
 
 impl TcpPort {
     pub fn tcp<A, P>(addr: A,
-                     domain_tx: mpsc::Sender<proto::MessageFrom>,
+                     domain_tx: proto::DomainRequestSender,
                      proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs,
           P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
@@ -38,19 +38,20 @@ impl TcpPort {
         }})
     }
 
-    pub fn tcp_oacsp<A>(addr: A, input: mpsc::Sender<proto::MessageFrom>) -> io::Result<Port<comm::tcp::TcpInterruptor>>
+    pub fn tcp_oacsp<A>(addr: A, domain_tx: proto::DomainRequestSender) ->
+        io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs {
-        Self::tcp(addr, input, proto::oacsp())
+        Self::tcp(addr, domain_tx, proto::oacsp())
     }
 }
 
-pub type DummyPort = Port<comm::dummy::ListenerEventSender<proto::RawMessage>>;
-pub type DummyPortListener = comm::dummy::ListenerEventSender<proto::RawMessage>;
-pub type DummyPortInput = comm::dummy::StreamEventSender<proto::RawMessage>;
-pub type DummyPortOutput = comm::dummy::MessageReceiver<proto::RawMessage>;
+pub type DummyPort = Port<comm::dummy::ListenerEventSender<proto::RawRequest, proto::Event>>;
+pub type DummyPortListener = comm::dummy::ListenerEventSender<proto::RawRequest, proto::Event>;
+pub type DummyPortInput = comm::dummy::StreamEventSender<proto::RawRequest>;
+pub type DummyPortOutput = comm::dummy::MessageReceiver<proto::Event>;
 
 impl DummyPort {
-    pub fn new(domain_tx: mpsc::Sender<proto::MessageFrom>) -> DummyPort {
+    pub fn new(domain_tx: proto::DomainRequestSender) -> DummyPort {
         let listener = comm::dummy::DummyTransportListener::new();
         let mut transport = comm::dummy::DummyTransport::new(listener);
         let interruption = transport.listener().shutdown_interruption();
@@ -87,16 +88,16 @@ impl<I: comm::Interrupt> Worker<I> {
     }
 }
 
-impl Worker<mpsc::Sender<proto::RawMessage>> {
+impl Worker<proto::EventSender> {
     pub fn shutdown(self) {
-        self.interruption.send(proto::Message::Close).unwrap();
+        self.interruption.send(proto::Event::Close).unwrap();
         self.thread.join().unwrap();
     }
 }
 
 struct Connection<I: comm::Interrupt> {
     reader: Worker<I>,
-    writer: Worker<mpsc::Sender<proto::RawMessage>>
+    writer: Worker<proto::EventSender>
 }
 
 impl<I: comm::Interrupt> Connection<I> {
@@ -107,7 +108,7 @@ impl<I: comm::Interrupt> Connection<I> {
 }
 
 fn spawn_listener<T, P>(mut transport: T,
-                        domain_tx: mpsc::Sender<proto::MessageFrom>,
+                        domain_tx: proto::DomainRequestSender,
                         proto: P) -> thread::JoinHandle<()>
 where T: comm::Transport + Send + 'static,
       P: proto::Protocol<T::Input, T::Output> + Send + 'static,
@@ -133,7 +134,7 @@ where T: comm::Transport + Send + 'static,
 
 fn spawn_connection<I, O, P>(input: I,
                              output: O,
-                             domain_tx: mpsc::Sender<proto::MessageFrom>,
+                             domain_tx: proto::DomainRequestSender,
                              proto: &P) -> Connection<I::Int>
 where I: comm::ShutdownInterruption,
       P: proto::Protocol<I, O> + Send + 'static,
@@ -155,8 +156,8 @@ where I: comm::ShutdownInterruption,
 }
 
 fn spawn_reader<R>(mut reader: R,
-                   input: mpsc::Sender<proto::MessageFrom>,
-                   output: mpsc::Sender<proto::RawMessage>) -> thread::JoinHandle<()>
+                   input: proto::DomainRequestSender,
+                   output: proto::EventSender) -> thread::JoinHandle<()>
 where R: proto::MessageRead + Send + 'static {
     thread::spawn(move || {
         loop {
@@ -171,18 +172,18 @@ where R: proto::MessageRead + Send + 'static {
                     return;
                 },
             };
-            input.send(msg.map_origin(&output)).unwrap();
+            input.send(msg.with_observer(&output)).unwrap();
         }
     })
 }
 
 fn spawn_writer<W>(mut writer: W,
-                   output: mpsc::Receiver<proto::RawMessage>) -> thread::JoinHandle<()>
+                   output: proto::EventReceiver) -> thread::JoinHandle<()>
 where W: proto::MessageWrite + Send + 'static {
     thread::spawn(move || {
         loop {
             let msg = output.recv().unwrap();
-            if msg == proto::Message::Close {
+            if msg == proto::Event::Close {
                 return;
             }
             writer.write_msg(&msg).unwrap();
@@ -217,8 +218,10 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let port = DummyPort::new(tx);
         let (conn_tx, _) = port.new_connection();
-        conn_tx.send(proto::Message::Open);
-        assert_eq!(rx.recv().unwrap().to_raw(), proto::Message::Open);
+        let req = proto::Request::write(
+            "domain", proto::Var::name("var"), proto::Value::Bool(true));
+        conn_tx.send(req.clone());
+        assert_eq!(rx.recv().unwrap().into_raw(), req);
         port.shutdown();
     }
 
@@ -227,11 +230,14 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let port = DummyPort::new(tx);
         let (conn_tx, conn_rx) = port.new_connection();
-        conn_tx.send(proto::Message::WriteData(42, ()));
-        let req = rx.recv().unwrap();
-        let origin = req.origin().unwrap();
-        origin.send(proto::Message::Open).unwrap();
-        assert_eq!(conn_rx.recv(), proto::Message::Open);
+        let raw_req = proto::Request::observe("domain", proto::Var::name("var"), ());
+        conn_tx.send(raw_req);
+        let dom_req = rx.recv().unwrap();
+        let origin = dom_req.observer().unwrap();
+        let event = proto::Event::update(
+            "domain", proto::Var::name("var"), proto::Value::Bool(true));
+        origin.send(event.clone()).unwrap();
+        assert_eq!(conn_rx.recv(), event);
         port.shutdown();
     }
 }

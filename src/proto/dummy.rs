@@ -14,8 +14,8 @@ use proto;
 
 pub struct DummyProtocol;
 
-pub type DummyProtocolInput = dummy::DummyTransportInput<proto::RawMessage>;
-pub type DummyProtocolOutput = dummy::DummyTransportOutput<proto::RawMessage>;
+pub type DummyProtocolInput = dummy::DummyTransportInput<proto::RawRequest>;
+pub type DummyProtocolOutput = dummy::DummyTransportOutput<proto::Event>;
 
 impl proto::Protocol<DummyProtocolInput, DummyProtocolOutput> for DummyProtocol {
     type Read = MessageReader;
@@ -35,7 +35,7 @@ pub struct MessageReader {
 }
 
 impl proto::MessageRead for MessageReader {
-    fn read_msg(&mut self) -> io::Result<proto::RawMessage> {
+    fn read_msg(&mut self) -> io::Result<proto::RawRequest> {
         match self.input.recv() {
             dummy::StreamEvent::Message(msg) => Ok(msg),
             dummy::StreamEvent::Shutdown => Err(io::Error::new(
@@ -49,7 +49,7 @@ pub struct MessageWriter {
 }
 
 impl proto::MessageWrite for MessageWriter {
-    fn write_msg(&mut self, msg: &proto::RawMessage) -> io::Result<()> {
+    fn write_msg(&mut self, msg: &proto::Event) -> io::Result<()> {
         self.output.send(msg.clone());
         Ok(())
     }

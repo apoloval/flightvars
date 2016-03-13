@@ -33,7 +33,7 @@ pub struct OacspReader<R: io::Read> {
 }
 
 impl<R: io::Read> MessageRead for OacspReader<R> {
-    fn read_msg(&mut self) -> io::Result<RawMessage> {
+    fn read_msg(&mut self) -> io::Result<RawRequest> {
         use std::io::BufRead;
         use self::msg::*;
         let mut line = String::new();
@@ -50,7 +50,7 @@ pub struct OacspWriter<W: io::Write> {
 }
 
 impl<W: io::Write> MessageWrite for OacspWriter<W> {
-    fn write_msg(&mut self, msg: &RawMessage) -> io::Result<()> {
+    fn write_msg(&mut self, msg: &Event) -> io::Result<()> {
         unimplemented!()
     }
 }

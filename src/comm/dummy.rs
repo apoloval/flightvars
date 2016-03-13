@@ -11,41 +11,41 @@ use std::sync::mpsc;
 
 use comm::*;
 
-pub enum StreamEvent<M> {
-    Message(M),
+pub enum StreamEvent<T> {
+    Message(T),
     Shutdown
 }
 
-pub struct StreamEventSender<M>(mpsc::Sender<StreamEvent<M>>);
+pub struct StreamEventSender<T>(mpsc::Sender<StreamEvent<T>>);
 
-impl<M> StreamEventSender<M> {
-    pub fn send(&self, msg: M) { self.0.send(StreamEvent::Message(msg)).unwrap() }
+impl<T> StreamEventSender<T> {
+    pub fn send(&self, msg: T) { self.0.send(StreamEvent::Message(msg)).unwrap() }
 }
 
-impl<M> Interrupt for StreamEventSender<M> {
+impl<T> Interrupt for StreamEventSender<T> {
     fn interrupt(self) { self.0.send(StreamEvent::Shutdown).unwrap() }
 }
 
-pub struct StreamEventReceiver<M>(mpsc::Receiver<StreamEvent<M>>);
+pub struct StreamEventReceiver<T>(mpsc::Receiver<StreamEvent<T>>);
 
-pub struct MessageSender<M>(mpsc::Sender<M>);
+pub struct MessageSender<T>(mpsc::Sender<T>);
 
-pub struct MessageReceiver<M>(mpsc::Receiver<M>);
+pub struct MessageReceiver<T>(mpsc::Receiver<T>);
 
-impl<M> MessageReceiver<M> {
-    pub fn recv(&self) -> M { self.0.recv().unwrap() }
+impl<T> MessageReceiver<T> {
+    pub fn recv(&self) -> T { self.0.recv().unwrap() }
 }
 
-pub enum ListenerEvent<M> {
-    Accept((DummyTransportInput<M>, DummyTransportOutput<M>)),
+pub enum ListenerEvent<I, O> {
+    Accept((DummyTransportInput<I>, DummyTransportOutput<O>)),
     Shutdown
 }
 
 #[derive(Clone)]
-pub struct ListenerEventSender<M>(mpsc::Sender<ListenerEvent<M>>);
+pub struct ListenerEventSender<I, O>(mpsc::Sender<ListenerEvent<I, O>>);
 
-impl<M> ListenerEventSender<M> {
-    pub fn new_connection(&self) -> (StreamEventSender<M>, MessageReceiver<M>) {
+impl<I, O> ListenerEventSender<I, O> {
+    pub fn new_connection(&self) -> (StreamEventSender<I>, MessageReceiver<O>) {
         let (input, in_tx) = DummyTransportInput::new();
         let (output, out_rx) = DummyTransportOutput::new();
         self.0.send(ListenerEvent::Accept((input, output))).unwrap();
@@ -53,27 +53,27 @@ impl<M> ListenerEventSender<M> {
     }
 }
 
-impl<M> Interrupt for ListenerEventSender<M> {
+impl<I, O> Interrupt for ListenerEventSender<I, O> {
     fn interrupt(self) {
         self.0.send(ListenerEvent::Shutdown).unwrap();
     }
 }
 
-pub type ListenerEventReceiver<M> = mpsc::Receiver<ListenerEvent<M>>;
+pub type ListenerEventReceiver<I, O> = mpsc::Receiver<ListenerEvent<I, O>>;
 
-pub type ListenerInterruptor<M> = mpsc::Sender<ListenerEvent<M>>;
+pub type ListenerInterruptor<I, O> = mpsc::Sender<ListenerEvent<I, O>>;
 
-impl<M> Interrupt for ListenerInterruptor<M> {
+impl<I, O> Interrupt for ListenerInterruptor<I, O> {
     fn interrupt(self) { self.send(ListenerEvent::Shutdown).unwrap(); }
 }
 
-pub struct DummyTransportInput<M> {
-    tx: StreamEventSender<M>,
-    rx: StreamEventReceiver<M>
+pub struct DummyTransportInput<T> {
+    tx: StreamEventSender<T>,
+    rx: StreamEventReceiver<T>
 }
 
-impl<M> DummyTransportInput<M> {
-    pub fn new() -> (DummyTransportInput<M>, StreamEventSender<M>) {
+impl<T> DummyTransportInput<T> {
+    pub fn new() -> (DummyTransportInput<T>, StreamEventSender<T>) {
         let (tx, rx) = mpsc::channel();
         let tx_out = StreamEventSender(tx.clone());
         let input = DummyTransportInput {
@@ -83,39 +83,39 @@ impl<M> DummyTransportInput<M> {
         (input, tx_out)
     }
 
-    pub fn recv(&self) -> StreamEvent<M> { self.rx.0.recv().unwrap() }
+    pub fn recv(&self) -> StreamEvent<T> { self.rx.0.recv().unwrap() }
 }
 
-impl<M> ShutdownInterruption for DummyTransportInput<M> {
-    type Int = StreamEventSender<M>;
-    fn shutdown_interruption(&mut self) -> StreamEventSender<M> {
+impl<T> ShutdownInterruption for DummyTransportInput<T> {
+    type Int = StreamEventSender<T>;
+    fn shutdown_interruption(&mut self) -> StreamEventSender<T> {
         StreamEventSender(self.tx.0.clone())
     }
 }
 
-pub struct DummyTransportOutput<M> {
-    tx: MessageSender<M>
+pub struct DummyTransportOutput<T> {
+    tx: MessageSender<T>
 }
 
-impl<M> DummyTransportOutput<M> {
-    pub fn new() -> (DummyTransportOutput<M>, MessageReceiver<M>) {
+impl<T> DummyTransportOutput<T> {
+    pub fn new() -> (DummyTransportOutput<T>, MessageReceiver<T>) {
         let (tx, rx) = mpsc::channel();
         let output = DummyTransportOutput { tx: MessageSender(tx) };
         (output, MessageReceiver(rx))
     }
 
-    pub fn send(&self, msg: M) {
+    pub fn send(&self, msg: T) {
         self.tx.0.send(msg);
     }
 }
 
-pub struct DummyTransportListener<M> {
-    tx: ListenerEventSender<M>,
-    rx: ListenerEventReceiver<M>
+pub struct DummyTransportListener<I, O> {
+    tx: ListenerEventSender<I, O>,
+    rx: ListenerEventReceiver<I, O>
 }
 
-impl<M> DummyTransportListener<M> {
-    pub fn new() -> DummyTransportListener<M> {
+impl<I, O> DummyTransportListener<I, O> {
+    pub fn new() -> DummyTransportListener<I, O> {
         let (tx, rx) = mpsc::channel();
         let listener = DummyTransportListener {
             tx: ListenerEventSender(tx),
@@ -124,8 +124,8 @@ impl<M> DummyTransportListener<M> {
     }
 }
 
-impl<M> Listen<DummyTransportInput<M>, DummyTransportOutput<M>> for DummyTransportListener<M> {
-    fn listen(&mut self) -> io::Result<(DummyTransportInput<M>, DummyTransportOutput<M>)> {
+impl<I, O> Listen<DummyTransportInput<I>, DummyTransportOutput<O>> for DummyTransportListener<I, O> {
+    fn listen(&mut self) -> io::Result<(DummyTransportInput<I>, DummyTransportOutput<O>)> {
         match self.rx.recv().unwrap() {
             ListenerEvent::Accept((i, o)) => Ok((i, o)),
             ListenerEvent::Shutdown => Err(io::Error::new(
@@ -134,27 +134,27 @@ impl<M> Listen<DummyTransportInput<M>, DummyTransportOutput<M>> for DummyTranspo
     }
 }
 
-impl<M> ShutdownInterruption for DummyTransportListener<M> {
-    type Int = ListenerEventSender<M>;
-    fn shutdown_interruption(&mut self) -> ListenerEventSender<M> {
+impl<I, O> ShutdownInterruption for DummyTransportListener<I, O> {
+    type Int = ListenerEventSender<I, O>;
+    fn shutdown_interruption(&mut self) -> ListenerEventSender<I, O> {
         ListenerEventSender(self.tx.0.clone())
     }
 }
 
-pub struct DummyTransport<M> {
-    listener: DummyTransportListener<M>
+pub struct DummyTransport<I, O> {
+    listener: DummyTransportListener<I, O>
 }
 
-impl<M> DummyTransport<M> {
-    pub fn new(listener: DummyTransportListener<M>) -> DummyTransport<M> {
+impl<I, O> DummyTransport<I, O> {
+    pub fn new(listener: DummyTransportListener<I, O>) -> DummyTransport<I, O> {
         DummyTransport { listener: listener }
     }
 }
 
-impl<M> Transport for DummyTransport<M> {
-    type Input = DummyTransportInput<M>;
-    type Output = DummyTransportOutput<M>;
-    type Listener = DummyTransportListener<M>;
+impl<I, O> Transport for DummyTransport<I, O> {
+    type Input = DummyTransportInput<I>;
+    type Output = DummyTransportOutput<O>;
+    type Listener = DummyTransportListener<I, O>;
 
     fn listener(&mut self) -> &mut Self::Listener {
         &mut self.listener
