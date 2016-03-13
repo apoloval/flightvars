@@ -6,6 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::fmt;
 use std::io;
 use std::net;
 use std::sync::mpsc;
@@ -17,31 +18,47 @@ use proto;
 
 #[allow(dead_code)]
 pub struct Port<I: comm::Interrupt> {
+    name: String,
     worker: Worker<I>
 }
+
+impl<I: comm::Interrupt> Port<I> {
+    #[allow(dead_code)]
+    pub fn shutdown(self) {
+        info!("Shutting down {}", self.name);
+        self.worker.shutdown();
+    }
+}
+
 
 pub type TcpPort = Port<comm::tcp::TcpInterruptor>;
 
 impl TcpPort {
-    pub fn tcp<A, P>(addr: A,
+    pub fn tcp<A, P>(name: String,
+                     addr: A,
                      domain_tx: proto::DomainRequestSender,
                      proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs,
           P: proto::Protocol<comm::tcp::TcpInput, comm::tcp::TcpOutput> + Send + 'static,
           P::Read: Send + 'static,
           P::Write: Send + 'static {
+        info!("Creating {}", name);
         let mut transport = try!(comm::tcp::TcpTransport::bind(addr));
         let interruption = transport.listener().shutdown_interruption();
-        Ok(Port { worker: Worker {
-            thread: spawn_listener(transport, domain_tx, proto),
-            interruption: interruption
-        }})
+        Ok(Port {
+            name: name,
+            worker: Worker {
+                thread: spawn_listener(transport, domain_tx, proto),
+                interruption: interruption
+            }
+        })
     }
 
     pub fn tcp_oacsp<A>(addr: A, domain_tx: proto::DomainRequestSender) ->
         io::Result<Port<comm::tcp::TcpInterruptor>>
-    where A: net::ToSocketAddrs {
-        Self::tcp(addr, domain_tx, proto::oacsp())
+    where A: net::ToSocketAddrs + fmt::Display {
+        let name = format!("oacsp/tcp port at address {}", addr);
+        Self::tcp(name, addr, domain_tx, proto::oacsp())
     }
 }
 
@@ -56,23 +73,18 @@ impl DummyPort {
         let mut transport = comm::dummy::DummyTransport::new(listener);
         let interruption = transport.listener().shutdown_interruption();
         let protocol = proto::dummy();
-        let port = Port { worker: Worker {
-            thread: spawn_listener(transport, domain_tx, protocol),
-            interruption: interruption
-        }};
+        let port = Port {
+            name: "dummy".to_string(),
+            worker: Worker {
+                thread: spawn_listener(transport, domain_tx, protocol),
+                interruption: interruption
+            }
+        };
         port
     }
 
     pub fn new_connection(&self) -> (DummyPortInput, DummyPortOutput) {
         self.worker.interruption.new_connection()
-    }
-
-}
-
-impl<I: comm::Interrupt> Port<I> {
-    #[allow(dead_code)]
-    pub fn shutdown(self) {
-        self.worker.shutdown();
     }
 }
 

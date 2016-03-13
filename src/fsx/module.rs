@@ -8,22 +8,35 @@
 
 use std::mem::size_of;
 use std::ptr;
+use std::sync::mpsc;
 
 use libc::malloc;
 
 use fsx::logging;
+use port;
+use proto;
 
-struct Module;
+struct Module {
+    oacsp_tcp: Option<port::TcpPort>
+}
 
 impl Module {
-    pub fn new() -> Self { Module }
+    pub fn new() -> Self {
+        Module {
+            oacsp_tcp: None,
+        }
+    }
+
     pub fn start(&mut self) {
         logging::config_logging();
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
+        let (tx, _) = mpsc::channel();
+        self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", tx).unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {
         info!("Stopping FlightVars module");
+        for port in self.oacsp_tcp { port.shutdown(); }
         info!("FlightVars module stopped successfully");
     }
 }
