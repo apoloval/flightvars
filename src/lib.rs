@@ -11,6 +11,7 @@ extern crate hex;
 extern crate libc;
 #[macro_use] extern crate log;
 extern crate log4rs;
+extern crate ws2_32;
 
 #[cfg(windows)] mod fsx;
 mod util;

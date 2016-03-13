@@ -11,50 +11,108 @@ use std::net;
 
 use comm::*;
 
-pub struct TcpTransport {
-    listener: net::TcpListener
-}
+#[derive(Debug)]
+pub struct TcpInput(net::TcpStream);
 
-impl TcpTransport {
-    pub fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpTransport> {
-        Ok(TcpTransport { listener: try!(net::TcpListener::bind(addr)) })
+#[cfg(unix)]
+impl io::Read for TcpInput {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
     }
 }
 
-impl Transport for TcpTransport {
-    type Input = net::TcpStream;
-    type Output = net::TcpStream;
-    type Listener = net::TcpListener;
-
-    fn listener(&mut self) -> &mut net::TcpListener {
-        &mut self.listener
+#[cfg(windows)]
+impl io::Read for TcpInput {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buf)
     }
 }
 
-impl Listen<net::TcpStream, net::TcpStream> for net::TcpListener {
-    fn listen(&mut self) -> io::Result<(net::TcpStream, net::TcpStream)> {
-        let (conn, _) = try!(self.accept());
-        let input = try!(conn.try_clone());
-        let output = conn;
+impl ShutdownInterruption for TcpInput {
+    type Int = TcpInterruptor;
+
+    fn shutdown_interruption(&mut self) -> TcpInterruptor {
+        TcpInterruptor::from_stream(&self.0)
+    }
+}
+
+
+#[derive(Debug)]
+pub struct TcpOutput(net::TcpStream);
+
+impl io::Write for TcpOutput {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> { self.0.write(buf) }
+    fn flush(&mut self) -> io::Result<()> { self.0.flush() }
+}
+
+
+pub struct TcpListener(net::TcpListener);
+
+impl TcpListener {
+    pub fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpListener> {
+        net::TcpListener::bind(addr).map(|l| TcpListener(l))
+    }
+
+    #[cfg(unix)]
+    fn accept(&mut self) -> io::Result<net::TcpStream> {
+        self.0.accept().map(|(s, _)| s)
+    }
+
+    #[cfg(windows)]
+    fn accept(&mut self) -> io::Result<net::TcpStream> {
+        self.0.accept()
+            .map(|(s, _)| s)
+            .map_err(Self::map_interrupt_error)
+    }
+
+    #[cfg(windows)]
+    fn map_interrupt_error(error: io::Error) -> io::Error {
+        if error.kind() == io::ErrorKind::Other && error.raw_os_error() == Some(10004) {
+            io::Error::new(io::ErrorKind::ConnectionAborted, "listener was interrupted")
+        } else {
+            error
+        }
+    }
+}
+
+impl Listen<TcpInput, TcpOutput> for TcpListener {
+    fn listen(&mut self) -> io::Result<(TcpInput, TcpOutput)> {
+        let conn = try!(self.accept());
+        let input = TcpInput(try!(conn.try_clone()));
+        let output = TcpOutput(conn);
         Ok((input, output))
     }
 }
 
-impl ShutdownInterruption for net::TcpListener {
+impl ShutdownInterruption for TcpListener {
     type Int = TcpInterruptor;
 
     fn shutdown_interruption(&mut self) -> TcpInterruptor {
-        TcpInterruptor::from_listener(self)
+        TcpInterruptor::from_listener(&self.0)
     }
 }
 
-impl ShutdownInterruption for net::TcpStream {
-    type Int = TcpInterruptor;
 
-    fn shutdown_interruption(&mut self) -> TcpInterruptor {
-        TcpInterruptor::from_stream(self)
+pub struct TcpTransport {
+    listener: TcpListener
+}
+
+impl TcpTransport {
+    pub fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpTransport> {
+        Ok(TcpTransport { listener: try!(TcpListener::bind(addr)) })
     }
 }
+
+impl Transport for TcpTransport {
+    type Input = TcpInput;
+    type Output = TcpOutput;
+    type Listener = TcpListener;
+
+    fn listener(&mut self) -> &mut TcpListener {
+        &mut self.listener
+    }
+}
+
 
 #[cfg(unix)]
 pub mod unix {
@@ -89,20 +147,55 @@ pub mod unix {
 #[cfg(unix)]
 pub use self::unix::*;
 
+#[cfg(windows)]
+pub mod win {
+    use std::net;
+    use std::os::windows::io::{AsRawSocket, RawSocket};
+
+    use ws2_32;
+
+    use comm::*;
+
+    pub struct TcpInterruptor {
+        socket: RawSocket
+    }
+
+    impl TcpInterruptor {
+        pub fn from_listener(listener: &net::TcpListener) -> TcpInterruptor {
+            TcpInterruptor { socket: listener.as_raw_socket() }
+        }
+
+        pub fn from_stream(stream: &net::TcpStream) -> TcpInterruptor {
+            TcpInterruptor { socket: stream.as_raw_socket() }
+        }
+    }
+
+    impl Interrupt for TcpInterruptor {
+        fn interrupt(self) {
+            unsafe { ws2_32::closesocket(self.socket); }
+        }
+    }
+}
+
+#[cfg(windows)]
+pub use self::win::*;
+
 #[cfg(test)]
 mod tests {
     use std::io;
-    use std::io::{BufRead, Write};
+    use std::io::{BufRead, Read, Write};
     use std::net;
     use std::thread;
     use std::time;
 
     use comm::*;
 
+    use super::*;
+
     #[test]
     fn should_wait_conn() {
         let child = thread::spawn(|| {
-            let mut listener = net::TcpListener::bind("127.0.0.1:1234").unwrap();
+            let mut listener = TcpListener::bind("127.0.0.1:1234").unwrap();
             let (r, mut w) = listener.listen().unwrap();
             let mut input = io::BufReader::new(r);
             let mut line = String::new();
@@ -121,8 +214,8 @@ mod tests {
     }
 
     #[test]
-    fn should_close_from_shutdown_handle() {
-        let mut listener = net::TcpListener::bind("127.0.0.1:1235").unwrap();
+    fn should_close_listener_from_shutdown_handle() {
+        let mut listener = TcpListener::bind("127.0.0.1:1235").unwrap();
         let interruption = listener.shutdown_interruption();
         let child = thread::spawn(move || {
             assert_eq!(listener.listen().unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
@@ -130,5 +223,29 @@ mod tests {
         thread::sleep(time::Duration::from_millis(25));
         interruption.interrupt();
         child.join().unwrap();
+    }
+
+    #[test]
+    fn should_close_input_from_shutdown_handle() {
+        let mut listener = TcpListener::bind("127.0.0.1:1236").unwrap();
+        let interruption = listener.shutdown_interruption();
+        let client = thread::spawn(move || {
+            let conn = net::TcpStream::connect("127.0.0.1:1236");
+            thread::sleep(time::Duration::from_millis(50));
+        });
+        let child = thread::spawn(move || {
+            let (mut conn, _) = listener.listen().unwrap();
+            let interruption = conn.shutdown_interruption();
+            thread::spawn(move || {
+                thread::sleep(time::Duration::from_millis(20));
+                interruption.interrupt();
+            });
+            let mut buf = [10; 0];
+            assert_eq!(conn.read(&mut buf).unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
+        });
+        thread::sleep(time::Duration::from_millis(50));
+        interruption.interrupt();
+        child.join().unwrap();
+        client.join().unwrap();
     }
 }

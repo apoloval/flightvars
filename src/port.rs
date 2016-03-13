@@ -27,7 +27,7 @@ impl TcpPort {
                      domain_tx: proto::DomainRequestSender,
                      proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs,
-          P: proto::BidirProtocol<net::TcpStream> + Send + 'static,
+          P: proto::Protocol<comm::tcp::TcpInput, comm::tcp::TcpOutput> + Send + 'static,
           P::Read: Send + 'static,
           P::Write: Send + 'static {
         let mut transport = try!(comm::tcp::TcpTransport::bind(addr));
