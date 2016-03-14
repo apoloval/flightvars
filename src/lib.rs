@@ -13,6 +13,7 @@ extern crate libc;
 extern crate log4rs;
 extern crate ws2_32;
 
+mod domain;
 #[cfg(windows)] mod fsx;
 mod util;
 mod comm;
