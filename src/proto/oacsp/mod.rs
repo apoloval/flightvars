@@ -8,6 +8,7 @@
 
 use std::io;
 
+use domain::{Command, Event};
 use proto::*;
 
 mod msg;
@@ -33,7 +34,7 @@ pub struct OacspReader<R: io::Read> {
 }
 
 impl<R: io::Read> MessageRead for OacspReader<R> {
-    fn read_msg(&mut self) -> io::Result<RawRequest> {
+    fn read_msg(&mut self) -> io::Result<Command> {
         use std::io::BufRead;
         use self::msg::*;
         let mut line = String::new();
