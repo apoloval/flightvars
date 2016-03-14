@@ -17,7 +17,11 @@ pub struct TcpInput(net::TcpStream);
 #[cfg(unix)]
 impl io::Read for TcpInput {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
+        self.0.read(buf).map_err(|e|
+            if e.kind() == io::ErrorKind::Other && e.raw_os_error() == Some(9) {
+                io::Error::new(io::ErrorKind::ConnectionAborted, "tcp input was interrupted")
+            } else { e }
+        )
     }
 }
 
@@ -240,7 +244,7 @@ mod tests {
                 thread::sleep(time::Duration::from_millis(20));
                 interruption.interrupt();
             });
-            let mut buf = [10; 0];
+            let mut buf = [0; 10];
             assert_eq!(conn.read(&mut buf).unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
         });
         thread::sleep(time::Duration::from_millis(50));
