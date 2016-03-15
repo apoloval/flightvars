@@ -93,6 +93,13 @@ impl<T> ShutdownInterruption for DummyTransportInput<T> {
     }
 }
 
+impl<T> Identify for DummyTransportInput<T> {
+    fn id(&self) -> String {
+        let ptr = self as *const Self as usize;
+        format!("dummy transport #{}", ptr)
+    }
+}
+
 pub struct DummyTransportOutput<T> {
     tx: MessageSender<T>
 }

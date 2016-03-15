@@ -149,17 +149,14 @@ where T: comm::Transport + Send + 'static,
     })
 }
 
-fn spawn_connection<I, O, D, P>(input: I,
-                                output: O,
-                                mut domain: D,
-                                proto: &P) -> Connection<I::Int>
-where I: comm::ShutdownInterruption,
+fn spawn_connection<I, O, D, P>(input: I, output: O, domain: D, proto: &P) -> Connection<I::Int>
+where I: comm::ShutdownInterruption + comm::Identify,
       D: CommandDelivery + Send + 'static,
       P: proto::Protocol<I, O> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
     let (reply_tx, reply_rx) = mpsc::channel();
-    let id = Client::new("TODO: put a valid client ID here!", reply_tx.clone());
+    let id = Client::new(&input.id(), reply_tx.clone());
     let mut reader_stream = input;
     let reader_interruption = reader_stream.shutdown_interruption();
     let msg_reader = proto.reader(reader_stream, id);

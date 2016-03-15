@@ -70,11 +70,16 @@ pub trait Listen<I, O> {
     fn listen(&mut self) -> io::Result<(I, O)>;
 }
 
+/// An object able to univoquely identify itself.
+pub trait Identify {
+    fn id(&self) -> String;
+}
+
 /// An object able to bind the type information for all transport entities.
 ///
 /// See [the module level documentation](index.html) for more.
 pub trait Transport {
-    type Input: ShutdownInterruption;
+    type Input: ShutdownInterruption + Identify;
     type Output;
     type Listener: Listen<Self::Input, Self::Output> + ShutdownInterruption;
 

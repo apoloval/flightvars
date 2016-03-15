@@ -40,6 +40,13 @@ impl ShutdownInterruption for TcpInput {
     }
 }
 
+impl Identify for TcpInput {
+    fn id(&self) -> String {
+        self.0.peer_addr()
+            .map(|a| format!("{}", a))
+            .unwrap_or_else(|_| format!("{:?}", self.0))
+    }
+}
 
 #[derive(Debug)]
 pub struct TcpOutput(net::TcpStream);
