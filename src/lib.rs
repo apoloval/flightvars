@@ -15,7 +15,6 @@ extern crate ws2_32;
 
 mod domain;
 #[cfg(windows)] mod fsx;
-mod util;
 mod comm;
 mod port;
 mod proto;

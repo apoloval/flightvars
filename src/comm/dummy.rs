@@ -112,7 +112,7 @@ impl<T> DummyTransportOutput<T> {
     }
 
     pub fn send(&self, msg: T) {
-        self.tx.0.send(msg);
+        self.tx.0.send(msg).unwrap();
     }
 }
 

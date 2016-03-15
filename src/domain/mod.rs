@@ -8,8 +8,6 @@
 
 use std::collections::HashMap;
 
-use proto;
-
 pub mod msg;
 
 pub use self::msg::*;
