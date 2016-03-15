@@ -172,11 +172,11 @@ where I: comm::ShutdownInterruption + comm::Identify,
 }
 
 fn spawn_reader<R, D>(mut reader: R, mut domain: D) -> thread::JoinHandle<()>
-where R: proto::MessageRead + Send + 'static,
+where R: proto::CommandRead + Send + 'static,
       D: CommandDelivery + Send + 'static, {
     thread::spawn(move || {
         loop {
-            let msg = match reader.read_msg() {
+            let msg = match reader.read_cmd() {
                 Ok(msg) => msg,
                 Err(ref e) if e.kind() == io::ErrorKind::ConnectionReset => {
                     info!("connection reset: terminating reader thread");
@@ -194,14 +194,14 @@ where R: proto::MessageRead + Send + 'static,
 
 fn spawn_writer<W>(mut writer: W,
                    output: EventReceiver) -> thread::JoinHandle<()>
-where W: proto::MessageWrite + Send + 'static {
+where W: proto::EventWrite + Send + 'static {
     thread::spawn(move || {
         loop {
             let msg = output.recv().unwrap();
             if msg == Event::Close {
                 return;
             }
-            writer.write_msg(&msg).unwrap();
+            writer.write_ev(&msg).unwrap();
         }
     })
 }

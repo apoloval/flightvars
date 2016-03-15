@@ -17,25 +17,25 @@ mod msg;
 pub struct Oacsp;
 
 impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
-    type Read = OacspReader<R>;
-    type Write = OacspWriter<W>;
+    type Read = CommandReader<R>;
+    type Write = EventWriter<W>;
 
-    fn reader(&self, input: R, id: Client) -> OacspReader<R> {
-        OacspReader { input: io::BufReader::new(input), id: id }
+    fn reader(&self, input: R, id: Client) -> CommandReader<R> {
+        CommandReader { input: io::BufReader::new(input), id: id }
     }
 
-    fn writer(&self, output: W) ->OacspWriter<W> {
-        OacspWriter { output: output }
+    fn writer(&self, output: W) -> EventWriter<W> {
+        EventWriter { output: output }
     }
 }
 
-pub struct OacspReader<R: io::Read> {
+pub struct CommandReader<R: io::Read> {
     input: io::BufReader<R>,
     id: Client,
 }
 
-impl<R: io::Read> MessageRead for OacspReader<R> {
-    fn read_msg(&mut self) -> io::Result<Command> {
+impl<R: io::Read> CommandRead for CommandReader<R> {
+    fn read_cmd(&mut self) -> io::Result<Command> {
         use std::io::BufRead;
         use self::msg::*;
         let mut line = String::new();
@@ -47,12 +47,12 @@ impl<R: io::Read> MessageRead for OacspReader<R> {
     }
 }
 
-pub struct OacspWriter<W: io::Write> {
+pub struct EventWriter<W: io::Write> {
     output: W
 }
 
-impl<W: io::Write> MessageWrite for OacspWriter<W> {
-    fn write_msg(&mut self, msg: &Event) -> io::Result<()> {
+impl<W: io::Write> EventWrite for EventWriter<W> {
+    fn write_ev(&mut self, msg: &Event) -> io::Result<()> {
         unimplemented!()
     }
 }

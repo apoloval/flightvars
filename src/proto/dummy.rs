@@ -42,25 +42,25 @@ pub type DummyProtocolInput = dummy::DummyTransportInput<DummyCommand>;
 pub type DummyProtocolOutput = dummy::DummyTransportOutput<Event>;
 
 impl proto::Protocol<DummyProtocolInput, DummyProtocolOutput> for DummyProtocol {
-    type Read = MessageReader;
-    type Write = MessageWriter;
+    type Read = CommandReader;
+    type Write = EventWriter;
 
     fn reader(&self, input: DummyProtocolInput, id: Client) -> Self::Read {
-        MessageReader { input: input, id: id }
+        CommandReader { input: input, id: id }
     }
 
     fn writer(&self, output: DummyProtocolOutput) -> Self::Write {
-        MessageWriter { output: output }
+        EventWriter { output: output }
     }
 }
 
-pub struct MessageReader {
+pub struct CommandReader {
     input: DummyProtocolInput,
     id: Client,
 }
 
-impl proto::MessageRead for MessageReader {
-    fn read_msg(&mut self) -> io::Result<Command> {
+impl proto::CommandRead for CommandReader {
+    fn read_cmd(&mut self) -> io::Result<Command> {
         match self.input.recv() {
             dummy::StreamEvent::Message(msg) => Ok(msg.into_cmd(self.id.clone())),
             dummy::StreamEvent::Shutdown => Err(io::Error::new(
@@ -69,12 +69,12 @@ impl proto::MessageRead for MessageReader {
     }
 }
 
-pub struct MessageWriter {
+pub struct EventWriter {
     output: DummyProtocolOutput
 }
 
-impl proto::MessageWrite for MessageWriter {
-    fn write_msg(&mut self, msg: &Event) -> io::Result<()> {
+impl proto::EventWrite for EventWriter {
+    fn write_ev(&mut self, msg: &Event) -> io::Result<()> {
         self.output.send(msg.clone());
         Ok(())
     }

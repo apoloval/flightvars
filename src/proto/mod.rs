@@ -13,19 +13,19 @@ use domain::{Client, Command, Event};
 pub mod oacsp;
 pub mod dummy;
 
-pub trait MessageRead {
-    fn read_msg(&mut self) -> io::Result<Command>;
+pub trait CommandRead {
+    fn read_cmd(&mut self) -> io::Result<Command>;
 }
 
 
-pub trait MessageWrite {
-    fn write_msg(&mut self, msg: &Event) -> io::Result<()>;
+pub trait EventWrite {
+    fn write_ev(&mut self, msg: &Event) -> io::Result<()>;
 }
 
 
 pub trait Protocol<I, O> {
-    type Read: MessageRead;
-    type Write: MessageWrite;
+    type Read: CommandRead;
+    type Write: EventWrite;
     fn reader(&self, input: I, id: Client) -> Self::Read;
     fn writer(&self, output: O) -> Self::Write;
 }
