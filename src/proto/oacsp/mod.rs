@@ -8,7 +8,7 @@
 
 use std::io;
 
-use domain::{Command, Event};
+use domain::{Client, Command, Event};
 use proto::*;
 
 mod msg;
@@ -20,8 +20,8 @@ impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
     type Read = OacspReader<R>;
     type Write = OacspWriter<W>;
 
-    fn reader(&self, input: R) -> OacspReader<R> {
-        OacspReader { input: io::BufReader::new(input) }
+    fn reader(&self, input: R, id: Client) -> OacspReader<R> {
+        OacspReader { input: io::BufReader::new(input), id: id }
     }
 
     fn writer(&self, output: W) ->OacspWriter<W> {
@@ -30,7 +30,8 @@ impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
 }
 
 pub struct OacspReader<R: io::Read> {
-    input: io::BufReader<R>
+    input: io::BufReader<R>,
+    id: Client,
 }
 
 impl<R: io::Read> MessageRead for OacspReader<R> {

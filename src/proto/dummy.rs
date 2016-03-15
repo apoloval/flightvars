@@ -10,20 +10,44 @@ use std::io;
 use std::sync::mpsc;
 
 use comm::dummy;
-use domain::{Command, Event};
+use domain::*;
 use proto;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum DummyCommand {
+    Observe(Domain, Var),
+    Write(Domain, Var, Value),
+}
+
+impl DummyCommand {
+    pub fn into_cmd(self, id: Client) -> Command {
+        match self {
+            DummyCommand::Observe(d, v) => Command::Observe(d, v, id),
+            DummyCommand::Write(d, var, val) => Command::Write(d, var, val),
+        }
+    }
+}
+
+impl From<Command> for DummyCommand {
+    fn from(cmd: Command) -> DummyCommand {
+        match cmd {
+            Command::Observe(d, v, _) => DummyCommand::Observe(d, v),
+            Command::Write(d, var, val) => DummyCommand::Write(d, var, val),
+        }
+    }
+}
 
 pub struct DummyProtocol;
 
-pub type DummyProtocolInput = dummy::DummyTransportInput<Command>;
+pub type DummyProtocolInput = dummy::DummyTransportInput<DummyCommand>;
 pub type DummyProtocolOutput = dummy::DummyTransportOutput<Event>;
 
 impl proto::Protocol<DummyProtocolInput, DummyProtocolOutput> for DummyProtocol {
     type Read = MessageReader;
     type Write = MessageWriter;
 
-    fn reader(&self, input: DummyProtocolInput) -> Self::Read {
-        MessageReader { input: input }
+    fn reader(&self, input: DummyProtocolInput, id: Client) -> Self::Read {
+        MessageReader { input: input, id: id }
     }
 
     fn writer(&self, output: DummyProtocolOutput) -> Self::Write {
@@ -32,13 +56,14 @@ impl proto::Protocol<DummyProtocolInput, DummyProtocolOutput> for DummyProtocol 
 }
 
 pub struct MessageReader {
-    input: DummyProtocolInput
+    input: DummyProtocolInput,
+    id: Client,
 }
 
 impl proto::MessageRead for MessageReader {
     fn read_msg(&mut self) -> io::Result<Command> {
         match self.input.recv() {
-            dummy::StreamEvent::Message(msg) => Ok(msg),
+            dummy::StreamEvent::Message(msg) => Ok(msg.into_cmd(self.id.clone())),
             dummy::StreamEvent::Shutdown => Err(io::Error::new(
                 io::ErrorKind::Interrupted, "connection interrupted")),
         }

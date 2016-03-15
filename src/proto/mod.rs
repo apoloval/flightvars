@@ -9,7 +9,7 @@
 use std::io;
 use std::sync::mpsc;
 
-use domain::{Command, Event};
+use domain::{Client, Command, Event};
 
 pub mod oacsp;
 pub mod dummy;
@@ -27,7 +27,7 @@ pub trait MessageWrite {
 pub trait Protocol<I, O> {
     type Read: MessageRead;
     type Write: MessageWrite;
-    fn reader(&self, input: I) -> Self::Read;
+    fn reader(&self, input: I, id: Client) -> Self::Read;
     fn writer(&self, output: O) -> Self::Write;
 }
 

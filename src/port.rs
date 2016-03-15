@@ -65,9 +65,9 @@ impl TcpPort {
     }
 }
 
-pub type DummyPort = Port<comm::dummy::ListenerEventSender<Command, Event>>;
+pub type DummyPort = Port<comm::dummy::ListenerEventSender<proto::dummy::DummyCommand, Event>>;
 pub type DummyPortListener = comm::dummy::ListenerEventSender<Command, Event>;
-pub type DummyPortInput = comm::dummy::StreamEventSender<Command>;
+pub type DummyPortInput = comm::dummy::StreamEventSender<proto::dummy::DummyCommand>;
 pub type DummyPortOutput = comm::dummy::MessageReceiver<Event>;
 
 impl DummyPort {
@@ -158,15 +158,15 @@ where I: comm::ShutdownInterruption,
       P: proto::Protocol<I, O> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let id = Client::new("TODO: put a valid client ID here!", reply_tx.clone());
     let mut reader_stream = input;
     let reader_interruption = reader_stream.shutdown_interruption();
-    let msg_reader = proto.reader(reader_stream);
-    let (reply_tx, reply_rx) = mpsc::channel();
+    let msg_reader = proto.reader(reader_stream, id);
     let writer_stream = output;
-    let writer_interruption = reply_tx.clone();
+    let writer_interruption = reply_tx;
     let msg_writer = proto.writer(writer_stream);
-    let id = Client::new("TODO: put a valid client ID here!", reply_tx);
-    let reader = spawn_reader(msg_reader, domain, id);
+    let reader = spawn_reader(msg_reader, domain);
     let writer = spawn_writer(msg_writer, reply_rx);
     Connection {
         reader: Worker { thread: reader, interruption: reader_interruption },
@@ -174,9 +174,7 @@ where I: comm::ShutdownInterruption,
     }
 }
 
-fn spawn_reader<R, D>(mut reader: R,
-                      mut domain: D,
-                      id: Client) -> thread::JoinHandle<()>
+fn spawn_reader<R, D>(mut reader: R, mut domain: D) -> thread::JoinHandle<()>
 where R: proto::MessageRead + Send + 'static,
       D: CommandDelivery + Send + 'static, {
     thread::spawn(move || {
@@ -215,6 +213,7 @@ where W: proto::MessageWrite + Send + 'static {
 mod tests {
     use std::sync::mpsc;
 
+    use proto::dummy::DummyCommand;
     use domain::*;
     use super::*;
 
@@ -238,19 +237,18 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let port = DummyPort::new(tx);
         let (conn_tx, _) = port.new_connection();
-        let cmd = Command::Write(Domain::custom("domain"), Var::name("var"), Value::Bool(true));
+        let cmd = DummyCommand::Write(Domain::custom("domain"), Var::name("var"), Value::Bool(true));
         conn_tx.send(cmd.clone());
-        assert_eq!(rx.recv().unwrap(), cmd);
+        assert_eq!(DummyCommand::from(rx.recv().unwrap()), cmd);
         port.shutdown();
     }
 
-    /*#[test]
+    #[test]
     fn should_write_into_connection() {
         let (tx, rx) = mpsc::channel();
         let port = DummyPort::new(tx);
         let (conn_tx, conn_rx) = port.new_connection();
-        let cmd = Command::Observe(
-            Domain::custom("domain"), Var::name("var"), Client::new("client", conn_tx));
+        let cmd = DummyCommand::Observe(Domain::custom("domain"), Var::name("var"));
         conn_tx.send(cmd);
         let dom_cmd = rx.recv().unwrap();
         let client = dom_cmd.client().unwrap();
@@ -258,5 +256,5 @@ mod tests {
         client.sender().send(event.clone()).unwrap();
         assert_eq!(conn_rx.recv(), event);
         port.shutdown();
-    }*/
+    }
 }
