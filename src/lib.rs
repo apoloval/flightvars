@@ -18,6 +18,7 @@ mod domain;
 mod comm;
 mod port;
 mod proto;
+mod util;
 
 #[cfg(windows)]
 #[export_name="\x01_DLLStart"]

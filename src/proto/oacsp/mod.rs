@@ -11,6 +11,7 @@ use std::io;
 use domain;
 use domain::{Client, Command, Event};
 use proto::*;
+use util::Consume;
 
 mod msg;
 use self::msg::*;
@@ -20,14 +21,14 @@ pub struct Oacsp;
 
 impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
     type Read = CommandReader<MessageIter<R>>;
-    type Write = EventWriter<W>;
+    type Write = EventWriter<MessageConsumer<W>>;
 
     fn reader(&self, input: R, id: Client) -> CommandReader<MessageIter<R>> {
         CommandReader::new(MessageIter::new(input), id)
     }
 
-    fn writer(&self, output: W) -> EventWriter<W> {
-        EventWriter { output: output }
+    fn writer(&self, output: W) -> EventWriter<MessageConsumer<W>> {
+        EventWriter { consumer: MessageConsumer::new(output) }
     }
 }
 
@@ -82,11 +83,11 @@ impl<I: Iterator<Item=io::Result<InputMessage>>> CommandRead for CommandReader<I
     }
 }
 
-pub struct EventWriter<W: io::Write> {
-    output: W
+pub struct EventWriter<C: Consume<OutputMessage>> {
+    consumer: C
 }
 
-impl<W: io::Write> EventWrite for EventWriter<W> {
+impl<C: Consume<OutputMessage>> EventWrite for EventWriter<C> {
     fn write_ev(&mut self, msg: &Event) -> io::Result<()> {
         unimplemented!()
     }
@@ -177,5 +178,9 @@ mod tests {
         let expected = Command::Observe(
             Var::FsuipcOffset(Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord)), id);
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn should_write_lvar_event() {
     }
 }

@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use domain::types::*;
 use domain::fsuipc::types::*;
+use util::Consume;
 
 #[derive(Debug, PartialEq)]
 pub enum InputMessage {
@@ -172,6 +173,23 @@ impl<R: io::Read> Iterator for MessageIter<R> {
             _ => {},
         }
         Some(line.trim().parse())
+    }
+}
+
+pub struct MessageConsumer<W: io::Write> {
+    output: W
+}
+
+impl<W: io::Write> MessageConsumer<W> {
+    pub fn new(output: W) -> MessageConsumer<W> {
+        MessageConsumer { output: output }
+    }
+}
+
+impl<W: io::Write> Consume<OutputMessage> for MessageConsumer<W> {
+    type Error = io::Error;
+    fn consume(&mut self, msg: OutputMessage) -> io::Result<()> {
+        writeln!(&mut self.output, "{}", msg)
     }
 }
 
