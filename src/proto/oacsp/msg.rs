@@ -54,7 +54,7 @@ impl FromStr for InputMessage {
     }
 }
 
-
+#[derive(Clone, Debug, PartialEq)]
 pub enum OutputMessage {
     EventLvar { lvar: String, value: Value },
     EventOffset { offset: OffsetAddr, value: Value }
