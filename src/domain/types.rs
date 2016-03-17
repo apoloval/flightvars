@@ -7,7 +7,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::fmt;
+use std::io;
+use std::str;
 use std::sync::mpsc;
+
+use domain::fsuipc::Offset;
 
 #[derive(Clone)]
 pub struct Client(String, EventSender);
@@ -30,50 +34,70 @@ impl fmt::Debug for Client {
 }
 
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum Domain {
-    Custom(String)
-}
-
-impl Domain {
-    pub fn custom(s: &str) -> Domain { Domain::Custom(s.to_string()) }
-}
-
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Var {
-    Name(String),
-    Offset(u16),
+    LVar(String),
+    FsuipcOffset(Offset),
 }
 
 impl Var {
-    pub fn name(n: &str) -> Var { Var::Name(n.to_string()) }
+    pub fn lvar(n: &str) -> Var { Var::LVar(n.to_string()) }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
     Bool(bool),
-    Int(i32),
+    Int(isize),
+    UnsignedInt(usize),
     Float(f32),
+}
+
+impl Value {
+    pub fn parse_int(s: &str) -> io::Result<Value> {
+        let parsed = try!(s.parse().map_err(|e| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("cannot parse integer value from '{}'", s)
+        )));
+        Ok(Value::Int(parsed))
+    }
+
+    pub fn parse_uint(s: &str) -> io::Result<Value> {
+        let parsed = try!(s.parse().map_err(|e| io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("cannot parse unsigned integer value from '{}'", s)
+        )));
+        Ok(Value::UnsignedInt(parsed))
+    }
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            Value::Bool(v) => write!(f, "{}", v),
+            Value::Int(v) => write!(f, "{}", v),
+            Value::UnsignedInt(v) => write!(f, "{}", v),
+            Value::Float(v) => write!(f, "{}", v),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
-    Observe(Domain, Var, Client),
-    Write(Domain, Var, Value),
+    Observe(Var, Client),
+    Write(Var, Value),
 }
 
 impl Command {
-    pub fn domain(&self) -> &Domain {
+    pub fn var(&self) -> &Var {
         match self {
-            &Command::Observe(ref d, _, _) => d,
-            &Command::Write(ref d, _, _) => d,
+            &Command::Observe(ref v, _) => v,
+            &Command::Write(ref v, _) => v,
         }
     }
 
     pub fn client(&self) -> Option<&Client> {
         match self {
-            &Command::Observe(_, _, ref c) => Some(c),
+            &Command::Observe(_, ref c) => Some(c),
             _ => None,
         }
     }
@@ -85,7 +109,7 @@ pub type CommandReceiver = mpsc::Receiver<Command>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
-    Update(Domain, Var, Value),
+    Update(Var, Value),
     Close,
 }
 

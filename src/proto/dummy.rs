@@ -14,15 +14,15 @@ use proto;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum DummyCommand {
-    Observe(Domain, Var),
-    Write(Domain, Var, Value),
+    Observe(Var),
+    Write(Var, Value),
 }
 
 impl DummyCommand {
     pub fn into_cmd(self, id: Client) -> Command {
         match self {
-            DummyCommand::Observe(d, v) => Command::Observe(d, v, id),
-            DummyCommand::Write(d, var, val) => Command::Write(d, var, val),
+            DummyCommand::Observe(var) => Command::Observe(var, id),
+            DummyCommand::Write(var, val) => Command::Write(var, val),
         }
     }
 }
@@ -30,8 +30,8 @@ impl DummyCommand {
 impl From<Command> for DummyCommand {
     fn from(cmd: Command) -> DummyCommand {
         match cmd {
-            Command::Observe(d, v, _) => DummyCommand::Observe(d, v),
-            Command::Write(d, var, val) => DummyCommand::Write(d, var, val),
+            Command::Observe(var, _) => DummyCommand::Observe(var),
+            Command::Write(var, val) => DummyCommand::Write(var, val),
         }
     }
 }

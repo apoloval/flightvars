@@ -10,165 +10,76 @@ use std::fmt;
 use std::io;
 use std::str::FromStr;
 
-use byteorder::{BigEndian, ReadBytesExt};
-use hex::FromHex;
-
-/// The value of a data transferred using OACSP
-pub type Value = i32;
+use domain::types::*;
+use domain::fsuipc::types::*;
 
 #[derive(Debug, PartialEq)]
-pub struct OffsetAddr(u16);
-
-impl FromHex for OffsetAddr {
-    type Error = io::Error;
-    fn from_hex(s: &str) -> Result<Self, Self::Error> {
-        let error = || io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("invalid FSUIPC offset address in '{}'", s));
-        let buf: Vec<u8> = try!(FromHex::from_hex(s).map_err(|_| error()));
-        if buf.len() > 2 { Err(error()) }
-        else {
-            (&buf[..]).read_u16::<BigEndian>()
-                .map(|v| OffsetAddr(v))
-                .map_err(|_| error())
-        }
-    }
-}
-
-impl fmt::Display for OffsetAddr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:x}", self.0)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum OffsetLen { Ub, Sb, Uw, Sw, Ud, Sd }
-
-impl fmt::Display for OffsetLen {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            OffsetLen::Ub => write!(f, "UB"),
-            OffsetLen::Sb => write!(f, "SB"),
-            OffsetLen::Uw => write!(f, "UW"),
-            OffsetLen::Sw => write!(f, "SW"),
-            OffsetLen::Ud => write!(f, "UD"),
-            OffsetLen::Sd => write!(f, "SD"),
-        }
-    }
-}
-
-impl FromStr for OffsetLen {
-    type Err = io::Error;
-    fn from_str(s: &str) -> Result<OffsetLen, io::Error> {
-        match s {
-            "UB" => Ok(OffsetLen::Ub),
-            "SB" => Ok(OffsetLen::Sb),
-            "UW" => Ok(OffsetLen::Uw),
-            "SW" => Ok(OffsetLen::Sw),
-            "UD" => Ok(OffsetLen::Ud),
-            "SD" => Ok(OffsetLen::Sd),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("invalid FSUIPC offset length in '{}'", s))),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Offset(OffsetAddr, OffsetLen);
-
-impl fmt::Display for Offset {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}:{}", self.0, self.1)
-    }
-}
-
-impl FromStr for Offset {
-    type Err = io::Error;
-    fn from_str(s: &str) -> Result<Offset, io::Error> {
-        let pair: Vec<&str> = s.split(":").collect();
-        if pair.len() == 2 {
-            let addr = try!(OffsetAddr::from_hex(pair[0]));
-            let len = try!(OffsetLen::from_str(pair[1]));
-            Ok(Offset(addr, len))
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("invalid FSUIPC offset in '{}'", s)))
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Message {
+pub enum InputMessage {
     Begin { version: u16, client_id: String },
     WriteLvar { lvar: String, value: Value },
     WriteOffset { offset: Offset, value: Value },
     ObserveLvar { lvar: String },
     ObserveOffset { offset: Offset },
+}
+
+impl InputMessage {
+
+    pub fn begin(version: u16, client_id: &str) -> InputMessage {
+        InputMessage::Begin { version: version, client_id: client_id.to_string() }
+    }
+
+    pub fn write_lvar(lvar: &str, value: Value) -> InputMessage {
+        InputMessage::WriteLvar { lvar: lvar.to_string(), value: value }
+    }
+
+    pub fn write_offset(offset: Offset, value: Value) -> InputMessage {
+        InputMessage::WriteOffset { offset: offset, value: value }
+    }
+
+    pub fn obs_lvar(lvar: &str) -> InputMessage {
+        InputMessage::ObserveLvar { lvar: lvar.to_string() }
+    }
+
+    pub fn obs_offset(offset: Offset) -> InputMessage {
+        InputMessage::ObserveOffset { offset: offset }
+    }
+}
+
+impl FromStr for InputMessage {
+    type Err = io::Error;
+    fn from_str(s: &str) -> Result<InputMessage, io::Error> {
+        let deco = MessageParser::new(s);
+        deco.parse()
+    }
+}
+
+
+pub enum OutputMessage {
     EventLvar { lvar: String, value: Value },
     EventOffset { offset: OffsetAddr, value: Value }
 }
 
-impl Message {
-
-    pub fn begin(version: u16, client_id: &str) -> Message {
-        Message::Begin { version: version, client_id: client_id.to_string() }
+impl OutputMessage {
+    pub fn event_lvar(lvar: &str, value: Value) -> OutputMessage {
+        OutputMessage::EventLvar { lvar: lvar.to_string(), value: value }
     }
 
-    pub fn write_lvar(lvar: &str, value: Value) -> Message {
-        Message::WriteLvar { lvar: lvar.to_string(), value: value }
-    }
-
-    pub fn write_offset(offset: Offset, value: Value) -> Message {
-        Message::WriteOffset { offset: offset, value: value }
-    }
-
-    pub fn obs_lvar(lvar: &str) -> Message {
-        Message::ObserveLvar { lvar: lvar.to_string() }
-    }
-
-    pub fn obs_offset(offset: Offset) -> Message {
-        Message::ObserveOffset { offset: offset }
-    }
-
-    pub fn event_lvar(lvar: &str, value: Value) -> Message {
-        Message::EventLvar { lvar: lvar.to_string(), value: value }
-    }
-
-    pub fn event_offset(offset: OffsetAddr, value: Value) -> Message {
-        Message::EventOffset { offset: offset, value: value }
+    pub fn event_offset(offset: OffsetAddr, value: Value) -> OutputMessage {
+        OutputMessage::EventOffset { offset: offset, value: value }
     }
 }
 
-impl fmt::Display for Message {
+impl fmt::Display for OutputMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            &Message::Begin { version, ref client_id } =>
-                write!(f, "BEGIN {} {}", version, client_id),
-            &Message::WriteLvar { ref lvar, value} =>
-                write!(f, "WRITE_LVAR {} {}", lvar, value),
-            &Message::WriteOffset { ref offset, value } =>
-                write!(f, "WRITE_OFFSET {} {}", offset, value),
-            &Message::ObserveLvar { ref lvar } =>
-                write!(f, "OBS_LVAR {}", lvar),
-            &Message::ObserveOffset { ref offset } =>
-                write!(f, "OBS_OFFSET {}", offset),
-            &Message::EventLvar { ref lvar, value } =>
+            &OutputMessage::EventLvar { ref lvar, value } =>
                 write!(f, "EVENT_LVAR {} {}", lvar, value),
-            &Message::EventOffset { ref offset, value } =>
+            &OutputMessage::EventOffset { ref offset, value } =>
                 write!(f, "EVENT_OFFSET {} {}", offset, value),
         }
     }
 }
 
-impl FromStr for Message {
-    type Err = io::Error;
-    fn from_str(s: &str) -> Result<Message, io::Error> {
-        let deco = MessageParser::new(s);
-        deco.parse()
-    }
-}
 
 pub struct MessageParser<'a> {
     input: &'a str
@@ -179,7 +90,7 @@ impl<'a> MessageParser<'a> {
         MessageParser { input: input }
     }
 
-    pub fn parse(self) -> io::Result<Message> {
+    pub fn parse(self) -> io::Result<InputMessage> {
         if self.input.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput, "cannot parse oacsp message from empty line"));
@@ -193,54 +104,38 @@ impl<'a> MessageParser<'a> {
             "WRITE_OFFSET" => self.parse_write_offset(&args),
             "OBS_LVAR" => self.parse_obs_lvar(&args),
             "OBS_OFFSET" => self.parse_obs_offset(&args),
-            "EVENT_LVAR" => self.parse_event_lvar(&args),
-            "EVENT_OFFSET" => self.parse_event_offset(&args),
             _ => Err(self.input_error()),
         }
     }
 
-    fn parse_begin(self, args: &[&str]) -> io::Result<Message> {
+    fn parse_begin(self, args: &[&str]) -> io::Result<InputMessage> {
         try!(self.require_argc(args, 2));
         let ver = try!(args[0].parse().map_err(|_| self.input_error()));
-        Ok(Message::begin(ver, args[1]))
+        Ok(InputMessage::begin(ver, args[1]))
     }
 
-    fn parse_write_lvar(self, args: &[&str]) -> io::Result<Message> {
+    fn parse_write_lvar(self, args: &[&str]) -> io::Result<InputMessage> {
         try!(self.require_argc(args, 2));
         let lvar = args[0];
-        let value = try!(args[1].parse().map_err(|_| self.input_error()));
-        Ok(Message::write_lvar(&lvar, value))
+        let value = try!(Value::parse_int(args[1]).map_err(|_| self.input_error()));
+        Ok(InputMessage::write_lvar(&lvar, value))
     }
 
-    fn parse_write_offset(self, args: &[&str]) -> io::Result<Message> {
+    fn parse_write_offset(self, args: &[&str]) -> io::Result<InputMessage> {
         try!(self.require_argc(args, 2));
-        let offset = try!(args[0].parse());
-        let value = try!(args[1].parse().map_err(|_| self.input_error()));
-        Ok(Message::write_offset(offset, value))
+        let offset: Offset = try!(args[0].parse());
+        let value = try!(offset.parse_value(args[1]).map_err(|_| self.input_error()));
+        Ok(InputMessage::write_offset(offset, value))
     }
 
-    fn parse_obs_lvar(self, args: &[&str]) -> io::Result<Message> {
+    fn parse_obs_lvar(self, args: &[&str]) -> io::Result<InputMessage> {
         try!(self.require_argc(args, 1));
-        Ok(Message::obs_lvar(args[0]))
+        Ok(InputMessage::obs_lvar(args[0]))
     }
 
-    fn parse_obs_offset(self, args: &[&str]) -> io::Result<Message> {
+    fn parse_obs_offset(self, args: &[&str]) -> io::Result<InputMessage> {
         try!(self.require_argc(args, 1));
-        Ok(Message::obs_offset(try!(args[0].parse())))
-    }
-
-    fn parse_event_lvar(self, args: &[&str]) -> io::Result<Message> {
-        try!(self.require_argc(args, 2));
-        let lvar = args[0];
-        let value = try!(args[1].parse().map_err(|_| self.input_error()));
-        Ok(Message::event_lvar(lvar, value))
-    }
-
-    fn parse_event_offset(self, args: &[&str]) -> io::Result<Message> {
-        try!(self.require_argc(args, 2));
-        let offset = try!(OffsetAddr::from_hex(args[0]).map_err(|_| self.input_error()));
-        let value = try!(args[1].parse().map_err(|_| self.input_error()));
-        Ok(Message::event_offset(offset, value))
+        Ok(InputMessage::obs_offset(try!(args[0].parse())))
     }
 
     fn require_argc(&self, args: &[&str], expected: usize) -> io::Result<()> {
@@ -267,8 +162,8 @@ impl<R: io::Read> MessageIter<R> {
 
 impl<R: io::Read> Iterator for MessageIter<R> {
 
-    type Item = io::Result<Message>;
-    fn next(&mut self) -> Option<io::Result<Message>> {
+    type Item = io::Result<InputMessage>;
+    fn next(&mut self) -> Option<io::Result<InputMessage>> {
         use std::io::BufRead;
         let mut line = String::new();
         match self.input.read_line(&mut line) {
@@ -284,121 +179,83 @@ impl<R: io::Read> Iterator for MessageIter<R> {
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
+    use domain::types::*;
+    use domain::fsuipc::types::*;
 
-    #[test]
-    fn should_display_begin_msg() {
-        let msg = Message::begin(1, "arduino");
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "BEGIN 1 arduino")
-    }
+    use super::*;
 
     #[test]
     fn should_parse_begin_msg() {
         let buf = "BEGIN 1 arduino";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::begin(1, "arduino"));
-    }
-
-    #[test]
-    fn should_display_write_lvar_msg() {
-        let msg = Message::write_lvar("foobar", 42);
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "WRITE_LVAR foobar 42")
+        let msg = InputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, InputMessage::begin(1, "arduino"));
     }
 
     #[test]
     fn should_parse_write_lvar_msg() {
         let buf = "WRITE_LVAR foobar 42";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::write_lvar("foobar", 42));
-    }
-
-    #[test]
-    fn should_display_write_offset_msg() {
-        let msg = Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42);
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "WRITE_OFFSET 1234:UW 42")
+        let msg = InputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, InputMessage::write_lvar("foobar", Value::Int(42)));
     }
 
     #[test]
     fn should_parse_write_offset_msg() {
         let buf = "WRITE_OFFSET 1234:UW 42";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::write_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw), 42));
-    }
-
-    #[test]
-    fn should_display_obs_lvar_msg() {
-        let msg = Message::obs_lvar("foobar");
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "OBS_LVAR foobar")
+        let msg = InputMessage::from_str(&buf).unwrap();
+        assert_eq!(
+            msg,
+            InputMessage::write_offset(
+                Offset::new(OffsetAddr::from(0x1234),
+                OffsetLen::UnsignedWord),
+                Value::UnsignedInt(42)));
     }
 
     #[test]
     fn should_parse_obs_lvar_msg() {
         let buf = "OBS_LVAR foobar";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::obs_lvar("foobar"));
-    }
-
-    #[test]
-    fn should_display_obs_offset_msg() {
-        let msg = Message::obs_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw));
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "OBS_OFFSET 1234:UW")
+        let msg = InputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, InputMessage::obs_lvar("foobar"));
     }
 
     #[test]
     fn should_parse_obs_offset_msg() {
         let buf = "OBS_OFFSET 1234:UW";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::obs_offset(Offset(OffsetAddr(0x1234), OffsetLen::Uw)));
-    }
-
-    #[test]
-    fn should_display_event_lvar_msg() {
-        let msg = Message::event_lvar("foobar", 42);
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "EVENT_LVAR foobar 42")
-    }
-
-    #[test]
-    fn should_parse_event_lvar_msg() {
-        let buf = "EVENT_LVAR foobar 42";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::event_lvar("foobar", 42));
-    }
-
-    #[test]
-    fn should_display_event_offset_msg() {
-        let msg = Message::event_offset(OffsetAddr(0x1234), 42);
-        let buf = format!("{}", msg);
-        assert_eq!(buf, "EVENT_OFFSET 1234 42")
-    }
-
-    #[test]
-    fn should_parse_event_offset_msg() {
-        let buf = "EVENT_OFFSET 1234 42";
-        let msg = Message::from_str(&buf).unwrap();
-        assert_eq!(msg, Message::event_offset(OffsetAddr(0x1234), 42));
+        let msg = InputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, InputMessage::obs_offset(
+            Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord)));
     }
 
     #[test]
     fn should_fail_to_parse_empty_line() {
         let buf = "";
-        assert!(Message::from_str(&buf).is_err());
+        assert!(InputMessage::from_str(&buf).is_err());
+    }
+
+    #[test]
+    fn should_display_event_lvar_msg() {
+        let msg = OutputMessage::event_lvar("foobar", Value::Int(42));
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "EVENT_LVAR foobar 42")
+    }
+
+    #[test]
+    fn should_display_event_offset_msg() {
+        let msg = OutputMessage::event_offset(OffsetAddr::from(0x1234), Value::UnsignedInt(42));
+        let buf = format!("{}", msg);
+        assert_eq!(buf, "EVENT_OFFSET 1234 42")
     }
 
     #[test]
     fn should_iterate_messages_from_read() {
-        let buf = b"BEGIN 1 arduino\nOBS_LVAR foobar\nwrong line\n\nEVENT_LVAR foobar 42";
+        let buf = b"BEGIN 1 arduino\nOBS_LVAR foobar\nwrong line\n\nWRITE_LVAR foobar 42";
         let mut iter = MessageIter::new(&buf[..]);
-        assert_eq!(iter.next().unwrap().unwrap(), Message::begin(1, "arduino"));
-        assert_eq!(iter.next().unwrap().unwrap(), Message::obs_lvar("foobar"));
+        assert_eq!(iter.next().unwrap().unwrap(), InputMessage::begin(1, "arduino"));
+        assert_eq!(iter.next().unwrap().unwrap(), InputMessage::obs_lvar("foobar"));
         assert!(iter.next().unwrap().is_err());
         assert!(iter.next().unwrap().is_err());
-        assert_eq!(iter.next().unwrap().unwrap(), Message::event_lvar("foobar", 42));
+        assert_eq!(
+            iter.next().unwrap().unwrap(),
+            InputMessage::write_lvar("foobar", Value::Int(42)));
         assert!(iter.next().is_none());
     }
 }

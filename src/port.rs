@@ -234,7 +234,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let port = DummyPort::new(tx);
         let (conn_tx, _) = port.new_connection();
-        let cmd = DummyCommand::Write(Domain::custom("domain"), Var::name("var"), Value::Bool(true));
+        let cmd = DummyCommand::Write(Var::lvar("var"), Value::Bool(true));
         conn_tx.send(cmd.clone());
         assert_eq!(DummyCommand::from(rx.recv().unwrap()), cmd);
         port.shutdown();
@@ -245,11 +245,11 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let port = DummyPort::new(tx);
         let (conn_tx, conn_rx) = port.new_connection();
-        let cmd = DummyCommand::Observe(Domain::custom("domain"), Var::name("var"));
+        let cmd = DummyCommand::Observe(Var::lvar("var"));
         conn_tx.send(cmd);
         let dom_cmd = rx.recv().unwrap();
         let client = dom_cmd.client().unwrap();
-        let event = Event::Update(Domain::custom("domain"), Var::name("var"), Value::Bool(true));
+        let event = Event::Update(Var::lvar("var"), Value::Bool(true));
         client.sender().send(event.clone()).unwrap();
         assert_eq!(conn_rx.recv(), event);
         port.shutdown();

@@ -1,0 +1,207 @@
+//
+// FlightVars
+// Copyright (c) 2015, 2016 Alvaro Polo
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+use std::fmt;
+use std::io;
+use std::str;
+
+use byteorder::{BigEndian, ReadBytesExt};
+use hex::FromHex;
+
+use domain::types::Value;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OffsetAddr(u16);
+
+impl From<u16> for OffsetAddr {
+    fn from(val: u16) -> OffsetAddr { OffsetAddr(val) }
+}
+
+impl fmt::Display for OffsetAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{:x}", self.0)
+    }
+}
+
+impl FromHex for OffsetAddr {
+    type Error = io::Error;
+    fn from_hex(s: &str) -> io::Result<OffsetAddr> {
+        let error = || io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("invalid FSUIPC offset address in '{}'", s));
+        let buf: Vec<u8> = try!(FromHex::from_hex(s).map_err(|_| error()));
+        if buf.len() > 2 { Err(error()) }
+        else {
+            (&buf[..]).read_u16::<BigEndian>()
+                .map(|v| OffsetAddr(v))
+                .map_err(|_| error())
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OffsetLen {
+    UnsignedByte,
+    SignedByte,
+    UnsignedWord,
+    SignedWord,
+    UnsignedDouble,
+    SignedDouble
+}
+
+impl fmt::Display for OffsetLen {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            OffsetLen::UnsignedByte => write!(f, "UB"),
+            OffsetLen::SignedByte => write!(f, "SB"),
+            OffsetLen::UnsignedWord => write!(f, "UW"),
+            OffsetLen::SignedWord => write!(f, "SW"),
+            OffsetLen::UnsignedDouble => write!(f, "UD"),
+            OffsetLen::SignedDouble => write!(f, "SD"),
+        }
+    }
+}
+
+impl str::FromStr for OffsetLen {
+    type Err = io::Error;
+    fn from_str(s: &str) -> Result<OffsetLen, io::Error> {
+        match s {
+            "UB" => Ok(OffsetLen::UnsignedByte),
+            "SB" => Ok(OffsetLen::SignedByte),
+            "UW" => Ok(OffsetLen::UnsignedWord),
+            "SW" => Ok(OffsetLen::SignedWord),
+            "UD" => Ok(OffsetLen::UnsignedDouble),
+            "SD" => Ok(OffsetLen::SignedDouble),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid FSUIPC offset length in '{}'", s))),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Offset(OffsetAddr, OffsetLen);
+
+impl Offset {
+    pub fn new(addr: OffsetAddr, len: OffsetLen) -> Offset { Offset(addr, len) }
+    pub fn addr(&self) -> OffsetAddr { self.0 }
+    pub fn len(&self) -> OffsetLen { self.1 }
+    
+    pub fn parse_value(&self, s: &str) -> io::Result<Value> {
+        match self.len() {
+            OffsetLen::UnsignedByte => Value::parse_uint(s),
+            OffsetLen::SignedByte => Value::parse_int(s),
+            OffsetLen::UnsignedWord => Value::parse_uint(s),
+            OffsetLen::SignedWord => Value::parse_int(s),
+            OffsetLen::UnsignedDouble => Value::parse_uint(s),
+            OffsetLen::SignedDouble => Value::parse_int(s),
+        }
+    }
+}
+
+impl fmt::Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}:{}", self.0, self.1)
+    }
+}
+
+impl str::FromStr for Offset {
+    type Err = io::Error;
+    fn from_str(s: &str) -> Result<Offset, io::Error> {
+        let pair: Vec<&str> = s.split(":").collect();
+        if pair.len() == 2 {
+            let addr = try!(OffsetAddr::from_hex(pair[0]));
+            let len = try!(OffsetLen::from_str(pair[1]));
+            Ok(Offset(addr, len))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid FSUIPC offset in '{}'", s)))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+    use std::str::FromStr;
+
+    use hex::FromHex;
+
+    use super::*;
+
+    #[test]
+    fn should_display_offset_addr() {
+        assert_eq!(format!("{}", OffsetAddr::from(0x1234)), "1234");
+        assert_eq!(format!("{}", OffsetAddr::from(0xabcd)), "abcd");
+    }
+
+    #[test]
+    fn should_get_offset_addr_from_hex() {
+        assert_eq!(OffsetAddr::from_hex("1234").unwrap(), OffsetAddr::from(0x1234));
+        assert_eq!(OffsetAddr::from_hex("abcd").unwrap(), OffsetAddr::from(0xabcd));
+    }
+
+    #[test]
+    fn should_fail_get_offset_addr_from_invalid_hex() {
+        assert_eq!(OffsetAddr::from_hex("").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(OffsetAddr::from_hex("foobar").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn should_display_offset_len() {
+        assert_eq!(format!("{}", OffsetLen::UnsignedByte), "UB");
+        assert_eq!(format!("{}", OffsetLen::SignedByte), "SB");
+        assert_eq!(format!("{}", OffsetLen::UnsignedWord), "UW");
+        assert_eq!(format!("{}", OffsetLen::SignedWord), "SW");
+        assert_eq!(format!("{}", OffsetLen::UnsignedDouble), "UD");
+        assert_eq!(format!("{}", OffsetLen::SignedDouble), "SD");
+    }
+
+    #[test]
+    fn should_get_offset_len_from_str() {
+        assert_eq!(OffsetLen::from_str("UB").unwrap(), OffsetLen::UnsignedByte);
+        assert_eq!(OffsetLen::from_str("SB").unwrap(), OffsetLen::SignedByte);
+        assert_eq!(OffsetLen::from_str("UW").unwrap(), OffsetLen::UnsignedWord);
+        assert_eq!(OffsetLen::from_str("SW").unwrap(), OffsetLen::SignedWord);
+        assert_eq!(OffsetLen::from_str("UD").unwrap(), OffsetLen::UnsignedDouble);
+        assert_eq!(OffsetLen::from_str("SD").unwrap(), OffsetLen::SignedDouble);
+    }
+
+    #[test]
+    fn should_fail_get_offset_len_from_invalid_str() {
+        assert_eq!(OffsetLen::from_str("").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(OffsetLen::from_str("foobar").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn should_display_offset() {
+        assert_eq!(
+            format!("{}", Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord)),
+            "1234:UW");
+        assert_eq!(
+            format!("{}", Offset::new(OffsetAddr::from(0xabcd), OffsetLen::SignedByte)),
+            "abcd:SB");
+    }
+
+    #[test]
+    fn should_get_offset_from_str() {
+        assert_eq!(
+            Offset::from_str("1234:UW").unwrap(),
+            Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord));
+        assert_eq!(
+            Offset::from_str("abcd:SB").unwrap(),
+            Offset::new(OffsetAddr::from(0xabcd), OffsetLen::SignedByte));
+    }
+
+    #[test]
+    fn should_fail_get_offset_from_invalid_str() {
+        assert_eq!(Offset::from_str("").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(Offset::from_str("foobar").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+    }
+}
