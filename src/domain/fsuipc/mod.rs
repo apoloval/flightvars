@@ -40,10 +40,10 @@ impl Domain {
 
     pub fn shutdown(self) {
         self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
-            warn!("unexpected error while sending shutdown message to fsuipc domain: {}", e);
+            warn!("unexpected error while sending shutdown message to FSUIPC domain: {}", e);
         });
         self.worker.join().unwrap_or_else(|_| {
-            warn!("unexpected error while waiting for fsuipc domain worker thread");
+            warn!("unexpected error while waiting for FSUIPC domain worker thread");
         });
     }
 
@@ -185,9 +185,12 @@ impl mio::Handler for Context {
             Envelope::Cmd(Command::Observe(Var::FsuipcOffset(offset), client)) => {
                 self.process_obs(offset, client)
             },
-            Envelope::Shutdown => event_loop.shutdown(),
+            Envelope::Shutdown => {
+                info!("shutting down FSUIPC domain event loop");
+                event_loop.shutdown();
+            },
             other => {
-                warn!("fsuipc domain received an unexpected message: {:?}", other);
+                warn!("FSUIPC domain received an unexpected message: {:?}", other);
             },
         }
     }
