@@ -22,6 +22,10 @@ impl From<u16> for OffsetAddr {
     fn from(val: u16) -> OffsetAddr { OffsetAddr(val) }
 }
 
+impl From<OffsetAddr> for u16 {
+    fn from(val: OffsetAddr) -> u16 { val.0 }
+}
+
 impl fmt::Display for OffsetAddr {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{:x}", self.0)
@@ -91,7 +95,7 @@ impl Offset {
     pub fn new(addr: OffsetAddr, len: OffsetLen) -> Offset { Offset(addr, len) }
     pub fn addr(&self) -> OffsetAddr { self.0 }
     pub fn len(&self) -> OffsetLen { self.1 }
-    
+
     pub fn parse_value(&self, s: &str) -> io::Result<Value> {
         match self.len() {
             OffsetLen::UnsignedByte => Value::parse_uint(s),

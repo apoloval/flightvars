@@ -8,6 +8,8 @@
 
 use std::thread;
 
+use fsuipc;
+use fsuipc::{Handle, Session};
 use mio;
 
 use domain::types::*;
@@ -56,15 +58,33 @@ impl Consume for Consumer {
 }
 
 
-struct Context;
+struct Context {
+    handle: fsuipc::local::LocalHandle,
+}
 
 impl Context {
     pub fn new()  -> Context {
-        Context
+        Context {
+            handle: fsuipc::local::LocalHandle::new().unwrap()
+        }
     }
 
     fn process_write(&mut self, offset: Offset, value: Value) {
         debug!("writing value {} to offset {}", value, offset);
+        match offset.len() {
+            OffsetLen::UnsignedByte => self.process_write_of(offset.addr(), u8::from(value)),
+            OffsetLen::SignedByte => self.process_write_of(offset.addr(), i8::from(value)),
+            OffsetLen::UnsignedWord => self.process_write_of(offset.addr(), u16::from(value)),
+            OffsetLen::SignedWord => self.process_write_of(offset.addr(), i16::from(value)),
+            OffsetLen::UnsignedDouble => self.process_write_of(offset.addr(), u32::from(value)),
+            OffsetLen::SignedDouble => self.process_write_of(offset.addr(), i32::from(value)),
+        }
+    }
+
+    fn process_write_of<T>(&mut self, offset: OffsetAddr, value: T) {
+        let mut session = self.handle.session();
+        session.write(u16::from(offset), &value).unwrap();
+        session.process().unwrap();
     }
 }
 
