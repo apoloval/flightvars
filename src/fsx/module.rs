@@ -8,35 +8,42 @@
 
 use std::mem::size_of;
 use std::ptr;
-use std::sync::mpsc;
 
 use libc::malloc;
 
+use domain;
 use fsx::logging;
 use port;
-use proto;
+use util::sink_consumer;
 
 struct Module {
-    oacsp_tcp: Option<port::TcpPort>
+    oacsp_tcp: Option<port::TcpPort>,
+    fsuipc: Option<domain::fsuipc::Domain>,
 }
 
 impl Module {
     pub fn new() -> Self {
         Module {
             oacsp_tcp: None,
+            fsuipc: None
         }
     }
 
     pub fn start(&mut self) {
         logging::config_logging();
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
-        let (tx, _) = mpsc::channel();
-        self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", tx).unwrap());
+        let fsuipc = domain::fsuipc::Domain::new();
+        let router = domain::DomainRouter::new(
+            fsuipc.consumer(),
+            sink_consumer());
+        self.fsuipc = Some(fsuipc);
+        self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router).unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {
         info!("Stopping FlightVars module");
         for port in self.oacsp_tcp { port.shutdown(); }
+        for dom in self.fsuipc { dom.shutdown(); }
         info!("FlightVars module stopped successfully");
     }
 }

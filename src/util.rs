@@ -67,6 +67,7 @@ impl<T, C, F> Consume for ConsumeMap<T, C, F> where C: Consume, F: FnMut(T) -> C
     }
 }
 
+#[derive(Clone)]
 pub struct SinkConsumer<T> {
     _phantom: PhantomData<T>
 }

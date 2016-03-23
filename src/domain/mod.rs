@@ -28,6 +28,14 @@ where F: Consume<Item=Command>,
     }
 }
 
+impl<F, L> Clone for DomainRouter<F, L>
+where F: Consume<Item=Command> + Clone,
+      L: Consume<Item=Command> + Clone {
+    fn clone(&self) -> DomainRouter<F, L> {
+        DomainRouter {  fsuipc: self.fsuipc.clone(), lvar: self.lvar.clone() }
+    }
+}
+
 impl<F, L> Consume for DomainRouter<F, L>
 where F: Consume<Item=Command>,
       L: Consume<Item=Command> {

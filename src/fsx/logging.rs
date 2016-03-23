@@ -21,14 +21,14 @@ pub fn config_logging() {
 
 fn log_config() -> Config {
     let log_path = Path::new("Modules/flightvars.log");
-    let file_pattern = PatternLayout::new("%d{%Y/%m/%d %H:%M:%S.%f} - %m").unwrap();
+    let file_pattern = PatternLayout::new("%d{%Y/%m/%d %H:%M:%S.%f} - [%l] [%M]: %m").unwrap();
     let file_appender = FileAppender::builder(log_path)
         .pattern(file_pattern)
         .build()
         .unwrap();
     let main_appender = Appender::builder("main".to_string(), Box::new(file_appender))
         .build();
-    let root = Root::builder(LogLevelFilter::Info)
+    let root = Root::builder(LogLevelFilter::Debug)
         .appender("main".to_string())
         .build();
     let config = Config::builder(root)

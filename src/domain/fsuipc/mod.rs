@@ -16,7 +16,7 @@ use util::Consume;
 pub mod types;
 pub use self::types::*;
 
-enum Envelope {
+pub enum Envelope {
     Cmd(Command),
     Shutdown
 }
@@ -36,9 +36,18 @@ impl Domain {
         self.tx.send(Envelope::Shutdown).unwrap();
         self.worker.join().unwrap();
     }
+
+    pub fn consumer(&self) -> Consumer {
+        Consumer { tx: self.tx.clone() }
+    }
 }
 
-impl Consume for Domain {
+#[derive(Clone)]
+pub struct Consumer {
+    tx: mio::Sender<Envelope>
+}
+
+impl Consume for Consumer {
     type Item = Command;
     type Error = mio::NotifyError<Envelope>;
     fn consume(&mut self, cmd: Command) -> Result<(), mio::NotifyError<Envelope>> {
@@ -53,6 +62,10 @@ impl Context {
     pub fn new()  -> Context {
         Context
     }
+
+    fn process_write(&mut self, offset: Offset, value: Value) {
+        debug!("writing value {} to offset {}", value, offset);
+    }
 }
 
 fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
@@ -61,7 +74,7 @@ fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
     let worker = thread::spawn(move || {
         let mut event_loop = event_loop;
         let mut ctx = Context::new();
-        event_loop.run(&mut ctx);
+        event_loop.run(&mut ctx).unwrap();
     });
     (worker, tx)
 }
@@ -71,13 +84,16 @@ impl mio::Handler for Context {
     type Message = Envelope;
 
     fn ready(&mut self,
-             event_loop: &mut mio::EventLoop<Context>,
-             token: mio::Token,
-             events: mio::EventSet) {
+             _event_loop: &mut mio::EventLoop<Context>,
+             _token: mio::Token,
+             _events: mio::EventSet) {
     }
 
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
         match msg {
+            Envelope::Cmd(Command::Write(Var::FsuipcOffset(offset), value)) => {
+                self.process_write(offset, value)
+            },
             Envelope::Shutdown => event_loop.shutdown(),
             _ => {},
         }
