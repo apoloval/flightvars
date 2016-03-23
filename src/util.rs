@@ -9,12 +9,14 @@
 use std::io;
 use std::sync::mpsc;
 
-pub trait Consume<T> {
+pub trait Consume {
+    type Item;
     type Error;
-    fn consume(&mut self, value: T) -> Result<(), Self::Error>;
+    fn consume(&mut self, value: Self::Item) -> Result<(), Self::Error>;
 }
 
-impl<T> Consume<T> for mpsc::Sender<T> {
+impl<T> Consume for mpsc::Sender<T> {
+    type Item = T;
     type Error = io::Error;
 
     fn consume(&mut self, value: T) -> Result<(), Self::Error> {

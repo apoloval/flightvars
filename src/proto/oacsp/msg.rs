@@ -186,7 +186,8 @@ impl<W: io::Write> MessageConsumer<W> {
     }
 }
 
-impl<W: io::Write> Consume<OutputMessage> for MessageConsumer<W> {
+impl<W: io::Write> Consume for MessageConsumer<W> {
+    type Item = OutputMessage;
     type Error = io::Error;
     fn consume(&mut self, msg: OutputMessage) -> io::Result<()> {
         writeln!(&mut self.output, "{}", msg)

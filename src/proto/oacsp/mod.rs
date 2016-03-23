@@ -83,17 +83,17 @@ impl<I: Iterator<Item=io::Result<InputMessage>>> CommandRead for CommandReader<I
     }
 }
 
-pub struct EventWriter<C: Consume<OutputMessage, Error=io::Error>> {
+pub struct EventWriter<C: Consume<Item=OutputMessage, Error=io::Error>> {
     consumer: C
 }
 
-impl<C: Consume<OutputMessage, Error=io::Error>> EventWriter<C> {
+impl<C: Consume<Item=OutputMessage, Error=io::Error>> EventWriter<C> {
     pub fn new(consumer: C) -> EventWriter<C> {
         EventWriter { consumer: consumer }
     }
 }
 
-impl<C: Consume<OutputMessage, Error=io::Error>> EventWrite for EventWriter<C> {
+impl<C: Consume<Item=OutputMessage, Error=io::Error>> EventWrite for EventWriter<C> {
     fn write_ev(&mut self, ev: &Event) -> io::Result<()> {
         match ev {
             &Event::Update(Var::LVar(ref name), ref value) =>
