@@ -21,6 +21,7 @@ pub use self::types::*;
 
 const POLLING_DELAY_MS: u64 = 50;
 
+#[derive(Debug)]
 pub enum Envelope {
     Cmd(Command),
     Shutdown
@@ -74,10 +75,12 @@ struct Observer {
 
 impl Observer {
     pub fn read(&mut self, session: &mut fsuipc::local::LocalSession) {
-        session.read_bytes(
-            u16::from(self.offset.addr()),
-            &mut self.buffer as *mut [u8; 4] as *mut u8,
-            usize::from(self.offset.len())).unwrap();
+        let offset = u16::from(self.offset.addr());
+        let buffer = &mut self.buffer as *mut [u8; 4] as *mut u8;
+        let nbytes = usize::from(self.offset.len());
+        if let Err(e) = session.read_bytes(offset, buffer, nbytes) {
+            error!("unexpected error while reading bytes from FSUIPC session: {}", e);
+        }
     }
 
     pub fn trigger_event(&mut self) {
@@ -86,7 +89,10 @@ impl Observer {
         if must_trigger {
             let event = Event::Update(Var::FsuipcOffset(self.offset), buf_value);
             debug!("triggering event {:?} to client {}", event, self.client.name());
-            self.client.sender().send(event).unwrap();
+            if let Err(e) = self.client.sender().send(event) {
+                error!("expected error while sending event to client {}: {}",
+                    self.client.name(), e);
+            }
             self.retain = Some(buf_value);
         }
     }
@@ -105,7 +111,7 @@ impl Context {
         })
     }
 
-    fn process_write(&mut self, offset: Offset, value: Value) {
+    fn process_write(&mut self, offset: Offset, value: Value) -> io::Result<()> {
         debug!("writing value {} to offset {}", value, offset);
         match offset.len() {
             OffsetLen::UnsignedByte => self.process_write_of(offset.addr(), u8::from(value)),
@@ -127,10 +133,11 @@ impl Context {
         });
     }
 
-    fn process_write_of<T>(&mut self, offset: OffsetAddr, value: T) {
+    fn process_write_of<T>(&mut self, offset: OffsetAddr, value: T) -> io::Result<()> {
         let mut session = self.handle.session();
-        session.write(u16::from(offset), &value).unwrap();
-        session.process().unwrap();
+        try!(session.write(u16::from(offset), &value));
+        try!(session.process());
+        Ok(())
     }
 }
 
@@ -171,13 +178,17 @@ impl mio::Handler for Context {
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
         match msg {
             Envelope::Cmd(Command::Write(Var::FsuipcOffset(offset), value)) => {
-                self.process_write(offset, value)
+                if let Err(e) = self.process_write(offset, value) {
+                    error!("unexpected IO error while processing write command: {}", e);
+                }
             },
             Envelope::Cmd(Command::Observe(Var::FsuipcOffset(offset), client)) => {
                 self.process_obs(offset, client)
             },
             Envelope::Shutdown => event_loop.shutdown(),
-            _ => {},
+            other => {
+                warn!("fsuipc domain received an unexpected message: {:?}", other);
+            },
         }
     }
 }
