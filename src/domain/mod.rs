@@ -6,48 +6,37 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use util::Consume;
+
 pub mod fsuipc;
 pub mod types;
 
 pub use self::types::*;
 
-pub trait CommandDelivery {
-    fn deliver(&mut self, cmd: Command);
+pub struct DomainRouter<F, L>
+where F: Consume<Item=Command>,
+      L: Consume<Item=Command> {
+    fsuipc: F,
+    lvar: L,
 }
 
-impl CommandDelivery for CommandSender {
-    fn deliver(&mut self, cmd: Command) {
-        self.send(cmd).unwrap()
+impl<F, L> DomainRouter<F, L>
+where F: Consume<Item=Command>,
+      L: Consume<Item=Command> {
+    pub fn new(fsuipc: F, lvar: L) -> DomainRouter<F, L> {
+        DomainRouter {  fsuipc: fsuipc, lvar: lvar }
     }
 }
 
-pub struct DomainRouter {
-    fsuipc: Option<CommandSender>,
-    lvar: Option<CommandSender>,
-}
-
-impl DomainRouter {
-    pub fn new() -> DomainRouter {
-        DomainRouter {  fsuipc: None, lvar: None }
-    }
-
-    pub fn add_fsuipc_route(&mut self, dest: CommandSender) { self.fsuipc = Some(dest); }
-    pub fn add_lvar_route(&mut self, dest: CommandSender) { self.lvar = Some(dest); }
-
-    fn route_for(&mut self, var: &Var) -> Option<&mut CommandSender> {
-        match var {
-            &Var::LVar(_) => self.lvar.as_mut(),
-            &Var::FsuipcOffset(_) => self.fsuipc.as_mut(),
-        }
-    }
-}
-
-impl CommandDelivery for DomainRouter {
-    fn deliver(&mut self, cmd: Command) {
-        let route = self.route_for(cmd.var());
-        match route {
-            Some(r) => r.deliver(cmd),
-            None => error!("no route defined for variable {:?}", cmd.var()),
+impl<F, L> Consume for DomainRouter<F, L>
+where F: Consume<Item=Command>,
+      L: Consume<Item=Command> {
+    type Item = Command;
+    type Error = ();
+    fn consume(&mut self, cmd: Command) -> Result<(), ()> {
+        match cmd.var() {
+            &Var::LVar(_) => Ok(self.lvar.consume(cmd).unwrap_or(())),
+            &Var::FsuipcOffset(_) => Ok(self.fsuipc.consume(cmd).unwrap_or(())),
         }
     }
 }
@@ -57,18 +46,18 @@ mod tests {
     use std::sync::mpsc;
 
     use domain::fsuipc::types::*;
+    use util::{Consume, sink_consumer};
 
     use super::*;
 
     #[test]
     fn should_deliver_using_router() {
-        let mut router = DomainRouter::new();
         let (tx, rx) = mpsc::channel();
-        router.add_fsuipc_route(tx);
+        let mut router = DomainRouter::new(tx, sink_consumer());
         let cmd = Command::Write(
             Var::FsuipcOffset(Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord)),
             Value::Bool(true));
-        router.deliver(cmd.clone());
+        router.consume(cmd.clone());
         assert_eq!(rx.recv().unwrap(), cmd);
     }
 }

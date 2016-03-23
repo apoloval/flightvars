@@ -16,6 +16,7 @@ use comm;
 use comm::*;
 use domain::*;
 use proto;
+use util::Consume;
 
 #[allow(dead_code)]
 pub struct Port<I: comm::Interrupt> {
@@ -40,7 +41,7 @@ impl TcpPort {
                      domain: D,
                      proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs,
-          D: CommandDelivery + Clone + Send + 'static,
+          D: Consume<Item=Command> + Clone + Send + 'static,
           P: proto::Protocol<comm::tcp::TcpInput, comm::tcp::TcpOutput> + Send + 'static,
           P::Read: Send + 'static,
           P::Write: Send + 'static {
@@ -59,7 +60,7 @@ impl TcpPort {
     pub fn tcp_oacsp<A, D>(addr: A, domain: D) ->
         io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs + fmt::Display,
-          D: CommandDelivery + Clone + Send + 'static {
+          D: Consume<Item=Command> + Clone + Send + 'static {
         let name = format!("oacsp/tcp port at address {}", addr);
         Self::tcp(name, addr, domain, proto::oacsp())
     }
@@ -72,7 +73,7 @@ pub type DummyPortOutput = comm::dummy::MessageReceiver<Event>;
 
 impl DummyPort {
     pub fn new<D>(domain: D) -> DummyPort
-    where D: CommandDelivery + Clone + Send + 'static {
+    where D: Consume<Item=Command> + Clone + Send + 'static {
         let listener = comm::dummy::DummyTransportListener::new();
         let mut transport = comm::dummy::DummyTransport::new(listener);
         let interruption = transport.listener().shutdown_interruption();
@@ -127,7 +128,7 @@ fn spawn_listener<T, D, P>(mut transport: T,
                         domain: D,
                         proto: P) -> thread::JoinHandle<()>
 where T: comm::Transport + Send + 'static,
-      D: CommandDelivery + Clone + Send + 'static,
+      D: Consume<Item=Command> + Clone + Send + 'static,
       P: proto::Protocol<T::Input, T::Output> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
@@ -151,7 +152,7 @@ where T: comm::Transport + Send + 'static,
 
 fn spawn_connection<I, O, D, P>(input: I, output: O, domain: D, proto: &P) -> Connection<I::Int>
 where I: comm::ShutdownInterruption + comm::Identify,
-      D: CommandDelivery + Send + 'static,
+      D: Consume<Item=Command> + Send + 'static,
       P: proto::Protocol<I, O> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
@@ -173,7 +174,7 @@ where I: comm::ShutdownInterruption + comm::Identify,
 
 fn spawn_reader<R, D>(mut reader: R, mut domain: D) -> thread::JoinHandle<()>
 where R: proto::CommandRead + Send + 'static,
-      D: CommandDelivery + Send + 'static, {
+      D: Consume<Item=Command> + Send + 'static, {
     thread::spawn(move || {
         loop {
             let msg = match reader.read_cmd() {
@@ -187,7 +188,7 @@ where R: proto::CommandRead + Send + 'static,
                     return;
                 },
             };
-            domain.deliver(msg);
+            domain.consume(msg);
         }
     })
 }
