@@ -83,9 +83,16 @@ impl Context {
         }
     }
 
-    fn process_write(&mut self, lvar: &str, value: Value) {
+    fn process_write(&mut self, lvar: &str, value: Value) -> io::Result<()> {
         debug!("writing value {} to lvar {}", value, lvar);
-        // TODO: implement this
+        let id = check_named_variable(lvar);
+        if id == -1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("there is no such named variable '{}'", lvar)));
+        }
+        set_named_variable_value(id, f64::from(value));
+        Ok(())
     }
 
     fn process_obs(&mut self, lvar: &str, client: Client) {
@@ -121,7 +128,9 @@ impl mio::Handler for Context {
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
         match msg {
             Envelope::Cmd(Command::Write(Var::LVar(lvar), value)) => {
-                self.process_write(&lvar, value);
+                if let Err(e) = self.process_write(&lvar, value) {
+                    error!("unexpected IO error while writing LVAR {}: {}", lvar, e);
+                }
             },
             Envelope::Cmd(Command::Observe(Var::LVar(lvar), client)) => {
                 self.process_obs(&lvar, client);
@@ -144,7 +153,7 @@ pub type Flags32 = u32;
 pub type GeneratePhase = u32;
 pub type Id = i32;
 
-pub fn check_named_variable(name: &str) -> Id {
+fn check_named_variable(name: &str) -> Id {
     unsafe {
         let func = (*Panels).check_named_variable;
         let name = CString::new(name).unwrap();
@@ -152,14 +161,21 @@ pub fn check_named_variable(name: &str) -> Id {
     }
 }
 
-pub fn get_named_variable_value(id: Id) -> f64 {
+fn get_named_variable_value(id: Id) -> f64 {
     unsafe {
         let func = (*Panels).get_named_variable_value;
         (func)(id)
     }
 }
 
-pub fn is_initialized() -> bool {
+fn set_named_variable_value(id: Id, value: f64) {
+    unsafe {
+        let func = (*Panels).set_named_variable_value;
+        (func)(id, value)
+    }
+}
+
+fn is_initialized() -> bool {
     unsafe { !Panels.is_null() }
 }
 
@@ -225,7 +241,7 @@ pub struct PanelFunctions {
     _register_named_variable: extern "stdcall" fn(),
     pub get_named_variable_value: extern "stdcall" fn(id: Id) -> f64,
     _get_named_variable_typed_value: extern "stdcall" fn(),
-    _set_named_variable_value: extern "stdcall" fn(),
+    pub set_named_variable_value: extern "stdcall" fn(id: Id, value: f64),
     _set_named_variable_typed_value: extern "stdcall" fn(),
     _reserved26: extern "stdcall" fn(),
     _reserved27: extern "stdcall" fn(),

@@ -76,8 +76,8 @@ macro_rules! define_from_value {
         impl From<Value> for $t {
             fn from(v: Value) -> $t {
                 match v {
-                    Value::Bool(true) => 1,
-                    Value::Bool(false) => 0,
+                    Value::Bool(true) => 1 as $t,
+                    Value::Bool(false) => 0 as $t,
                     Value::Int(i) => i as $t,
                     Value::UnsignedInt(i) => i as $t,
                     Value::Float(f) => f as $t,
@@ -93,6 +93,7 @@ define_from_value!(u16);
 define_from_value!(i16);
 define_from_value!(u32);
 define_from_value!(i32);
+define_from_value!(f64);
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
