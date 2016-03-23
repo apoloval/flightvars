@@ -10,7 +10,7 @@ use std::fmt;
 use std::io;
 use std::str;
 
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use hex::FromHex;
 
 use domain::types::Value;
@@ -56,6 +56,38 @@ pub enum OffsetLen {
     SignedWord,
     UnsignedDouble,
     SignedDouble
+}
+
+impl OffsetLen {
+    pub fn decode_value(&self, buffer: &[u8; 4]) -> Value {
+        match *self {
+            OffsetLen::UnsignedByte =>
+                Value::UnsignedInt(buffer[0] as usize),
+            OffsetLen::SignedByte =>
+                Value::Int(buffer[0] as isize),
+            OffsetLen::UnsignedWord =>
+                Value::UnsignedInt((&buffer[..]).read_u16::<LittleEndian>().unwrap() as usize),
+            OffsetLen::SignedWord =>
+                Value::Int((&buffer[..]).read_i16::<LittleEndian>().unwrap() as isize),
+            OffsetLen::UnsignedDouble =>
+                Value::UnsignedInt((&buffer[..]).read_u32::<LittleEndian>().unwrap() as usize),
+            OffsetLen::SignedDouble =>
+                Value::Int((&buffer[..]).read_i32::<LittleEndian>().unwrap() as isize),
+        }
+    }
+}
+
+impl From<OffsetLen> for usize {
+    fn from(len: OffsetLen) -> usize {
+        match len {
+            OffsetLen::UnsignedByte => 1,
+            OffsetLen::SignedByte => 1,
+            OffsetLen::UnsignedWord => 2,
+            OffsetLen::SignedWord => 2,
+            OffsetLen::UnsignedDouble => 4,
+            OffsetLen::SignedDouble => 4,
+        }
+    }
 }
 
 impl fmt::Display for OffsetLen {
@@ -137,7 +169,50 @@ mod tests {
 
     use hex::FromHex;
 
+    use domain::types::Value;
     use super::*;
+
+    #[test]
+    fn should_decode_unsigned_byte_offset_value() {
+        assert_eq!(
+            OffsetLen::UnsignedByte.decode_value(&[42, 0, 0, 0]),
+            Value::UnsignedInt(42));
+    }
+
+    #[test]
+    fn should_decode_signed_byte_offset_value() {
+        assert_eq!(
+            OffsetLen::SignedByte.decode_value(&[42, 0, 0, 0]),
+            Value::Int(42));
+    }
+
+    #[test]
+    fn should_decode_unsigned_word_offset_value() {
+        assert_eq!(
+            OffsetLen::UnsignedWord.decode_value(&[0x01, 0x02, 0, 0]),
+            Value::UnsignedInt(0x0201));
+    }
+
+    #[test]
+    fn should_decode_signed_word_offset_value() {
+        assert_eq!(
+            OffsetLen::SignedWord.decode_value(&[0x01, 0x02, 0, 0]),
+            Value::Int(0x0201));
+    }
+
+    #[test]
+    fn should_decode_unsigned_double_offset_value() {
+        assert_eq!(
+            OffsetLen::UnsignedDouble.decode_value(&[0x01, 0x02, 0x03, 0x04]),
+            Value::UnsignedInt(0x04030201));
+    }
+
+    #[test]
+    fn should_decode_signed_double_offset_value() {
+        assert_eq!(
+            OffsetLen::SignedDouble.decode_value(&[0x01, 0x02, 0x03, 0x04]),
+            Value::Int(0x04030201));
+    }
 
     #[test]
     fn should_display_offset_addr() {

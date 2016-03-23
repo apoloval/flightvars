@@ -18,6 +18,7 @@ pub struct Client(String, EventSender);
 
 impl Client {
     pub fn new(s: &str, sender: EventSender) -> Client { Client(s.to_string(), sender) }
+    pub fn name(&self) -> &str { &self.0 }
     pub fn sender(&self) -> &EventSender { &self.1 }
 }
 

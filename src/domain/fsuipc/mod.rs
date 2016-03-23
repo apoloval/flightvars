@@ -18,6 +18,8 @@ use util::Consume;
 pub mod types;
 pub use self::types::*;
 
+const POLLING_DELAY_MS: u64 = 50;
+
 pub enum Envelope {
     Cmd(Command),
     Shutdown
@@ -58,14 +60,43 @@ impl Consume for Consumer {
 }
 
 
+struct Observer {
+    offset: Offset,
+    client: Client,
+    retain: Option<Value>,
+    buffer: [u8; 4],
+}
+
+impl Observer {
+    pub fn read(&mut self, session: &mut fsuipc::local::LocalSession) {
+        session.read_bytes(
+            u16::from(self.offset.addr()),
+            &mut self.buffer as *mut [u8; 4] as *mut u8,
+            usize::from(self.offset.len())).unwrap();
+    }
+
+    pub fn trigger_event(&mut self) {
+        let buf_value = self.offset.len().decode_value(&self.buffer);
+        let must_trigger = self.retain.as_ref().map(|v| *v != buf_value).unwrap_or(true);
+        if must_trigger {
+            let event = Event::Update(Var::FsuipcOffset(self.offset), buf_value);
+            debug!("triggering event {:?} to client {}", event, self.client.name());
+            self.client.sender().send(event).unwrap();
+            self.retain = Some(buf_value);
+        }
+    }
+}
+
 struct Context {
     handle: fsuipc::local::LocalHandle,
+    observers: Vec<Observer>,
 }
 
 impl Context {
     pub fn new()  -> Context {
         Context {
-            handle: fsuipc::local::LocalHandle::new().unwrap()
+            handle: fsuipc::local::LocalHandle::new().unwrap(),
+            observers: Vec::new(),
         }
     }
 
@@ -81,6 +112,16 @@ impl Context {
         }
     }
 
+    fn process_obs(&mut self, offset: Offset, client: Client) {
+        debug!("client {} observing offset {}", client.name(), offset);
+        self.observers.push(Observer {
+            offset: offset,
+            client: client,
+            retain: None,
+            buffer: [0; 4]
+        });
+    }
+
     fn process_write_of<T>(&mut self, offset: OffsetAddr, value: T) {
         let mut session = self.handle.session();
         session.write(u16::from(offset), &value).unwrap();
@@ -94,6 +135,7 @@ fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
     let worker = thread::spawn(move || {
         let mut event_loop = event_loop;
         let mut ctx = Context::new();
+        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
         event_loop.run(&mut ctx).unwrap();
     });
     (worker, tx)
@@ -103,16 +145,25 @@ impl mio::Handler for Context {
     type Timeout = ();
     type Message = Envelope;
 
-    fn ready(&mut self,
-             _event_loop: &mut mio::EventLoop<Context>,
-             _token: mio::Token,
-             _events: mio::EventSet) {
+    fn timeout(&mut self, event_loop: &mut mio::EventLoop<Context>, _: ()) {
+        let mut session = self.handle.session();
+        for obs in self.observers.iter_mut() {
+            obs.read(&mut session);
+        }
+        session.process().unwrap();
+        for obs in self.observers.iter_mut() {
+            obs.trigger_event();
+        }
+        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
     }
 
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
         match msg {
             Envelope::Cmd(Command::Write(Var::FsuipcOffset(offset), value)) => {
                 self.process_write(offset, value)
+            },
+            Envelope::Cmd(Command::Observe(Var::FsuipcOffset(offset), client)) => {
+                self.process_obs(offset, client)
             },
             Envelope::Shutdown => event_loop.shutdown(),
             _ => {},
