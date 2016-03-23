@@ -11,54 +11,86 @@ use std::thread;
 use mio;
 
 use domain::types::*;
+use util::Consume;
 
 pub mod types;
 pub use self::types::*;
 
-pub struct FsuipcDomain {
+enum Envelope {
+    Cmd(Command),
+    Shutdown
+}
+
+pub struct Domain {
     worker: thread::JoinHandle<()>,
-    tx: mio::Sender<Command>
+    tx: mio::Sender<Envelope>
 }
 
-impl FsuipcDomain {
-    pub fn new() -> FsuipcDomain {
+impl Domain {
+    pub fn new() -> Domain {
         let (worker, tx) = spawn_worker();
-        FsuipcDomain { worker: worker, tx: tx }
+        Domain { worker: worker, tx: tx }
     }
 
-    pub fn shutdown() {
-        // TODO: send a msg using tx and wait for worker to stop
-        unimplemented!()
+    pub fn shutdown(self) {
+        self.tx.send(Envelope::Shutdown).unwrap();
+        self.worker.join().unwrap();
+    }
+}
+
+impl Consume for Domain {
+    type Item = Command;
+    type Error = mio::NotifyError<Envelope>;
+    fn consume(&mut self, cmd: Command) -> Result<(), mio::NotifyError<Envelope>> {
+        self.tx.send(Envelope::Cmd(cmd))
     }
 }
 
 
-pub struct FsuipcContext;
+struct Context;
 
-impl FsuipcContext {
-    pub fn new()  -> FsuipcContext {
-        FsuipcContext
+impl Context {
+    pub fn new()  -> Context {
+        Context
     }
 }
 
-fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Command>) {
+fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
     let event_loop = mio::EventLoop::new().unwrap();
     let tx = event_loop.channel();
     let worker = thread::spawn(move || {
         let mut event_loop = event_loop;
-        let mut ctx = FsuipcContext::new();
+        let mut ctx = Context::new();
         event_loop.run(&mut ctx);
     });
     (worker, tx)
 }
 
-impl mio::Handler for FsuipcContext {
+impl mio::Handler for Context {
     type Timeout = ();
-    type Message = Command;
+    type Message = Envelope;
 
     fn ready(&mut self,
-             event_loop: &mut mio::EventLoop<FsuipcContext>,
+             event_loop: &mut mio::EventLoop<Context>,
              token: mio::Token,
              events: mio::EventSet) {
+    }
+
+    fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
+        match msg {
+            Envelope::Shutdown => event_loop.shutdown(),
+            _ => {},
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_init_and_shutdown() {
+        let mut domain = Domain::new();
+        domain.shutdown();
     }
 }
