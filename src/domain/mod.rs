@@ -9,6 +9,7 @@
 use util::Consume;
 
 pub mod fsuipc;
+pub mod lvar;
 pub mod types;
 
 pub use self::types::*;

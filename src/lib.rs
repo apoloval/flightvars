@@ -33,3 +33,6 @@ pub extern "stdcall" fn dll_start() {
 pub extern "stdcall" fn dll_stop() {
     fsx::module::stop_module();
 }
+
+// Making this public we ensure this symbol is exported in the DLL
+pub use domain::lvar::Panels;

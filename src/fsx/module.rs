@@ -14,18 +14,19 @@ use libc::malloc;
 use domain;
 use fsx::logging;
 use port;
-use util::sink_consumer;
 
 struct Module {
     oacsp_tcp: Option<port::TcpPort>,
+
     fsuipc: Option<domain::fsuipc::Domain>,
+    lvar: Option<domain::lvar::Domain>,
 }
 
 impl Module {
     pub fn new() -> Self {
         Module {
             oacsp_tcp: None,
-            fsuipc: None
+            lvar: None, fsuipc: None,
         }
     }
 
@@ -33,10 +34,13 @@ impl Module {
         logging::config_logging();
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
         let fsuipc = domain::fsuipc::Domain::new();
+        let lvar = domain::lvar::Domain::new();
         let router = domain::DomainRouter::new(
             fsuipc.consumer(),
-            sink_consumer());
+            lvar.consumer());
+
         self.fsuipc = Some(fsuipc);
+        self.lvar = Some(lvar);
         self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router).unwrap());
         info!("FlightVars module started successfully");
     }
