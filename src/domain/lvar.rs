@@ -70,6 +70,19 @@ struct Observer {
 }
 
 impl Observer {
+    pub fn trigger_event(&mut self) {
+        let id = check_named_variable(&self.lvar).unwrap();
+        let val = Value::Int(get_named_variable_value(id) as isize);
+        let must_trigger = self.retain.as_ref().map(|v| *v != val).unwrap_or(true);
+        if must_trigger {
+            let var = Var::LVar(self.lvar.clone());
+            if let Err(e) = self.client.sender().send(Event::Update(var, val)) {
+                error!("unexpected error while sending event to client {}: {}",
+                    self.client.name(), e);
+            }
+            self.retain = Some(val);
+        }
+    }
 }
 
 struct Context {
@@ -85,12 +98,9 @@ impl Context {
 
     fn process_write(&mut self, lvar: &str, value: Value) -> io::Result<()> {
         debug!("writing value {} to lvar {}", value, lvar);
-        let id = check_named_variable(lvar);
-        if id == -1 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("there is no such named variable '{}'", lvar)));
-        }
+        let id = try!(check_named_variable(lvar).ok_or(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("there is no such named variable '{}'", lvar))));
         set_named_variable_value(id, f64::from(value));
         Ok(())
     }
@@ -122,7 +132,10 @@ impl mio::Handler for Context {
     type Message = Envelope;
 
     fn timeout(&mut self, event_loop: &mut mio::EventLoop<Context>, _: ()) {
-        // TODO: implement this
+        for obs in self.observers.iter_mut() {
+            obs.trigger_event();
+        }
+        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
     }
 
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
@@ -153,11 +166,12 @@ pub type Flags32 = u32;
 pub type GeneratePhase = u32;
 pub type Id = i32;
 
-fn check_named_variable(name: &str) -> Id {
+fn check_named_variable(name: &str) -> Option<Id> {
     unsafe {
         let func = (*Panels).check_named_variable;
         let name = CString::new(name).unwrap();
-        (func)(name.as_ptr())
+        let id = (func)(name.as_ptr());
+        if id != -1 { Some(id) } else { None }
     }
 }
 
