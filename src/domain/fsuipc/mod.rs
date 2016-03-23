@@ -6,6 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::io;
 use std::thread;
 
 use fsuipc;
@@ -37,8 +38,12 @@ impl Domain {
     }
 
     pub fn shutdown(self) {
-        self.tx.send(Envelope::Shutdown).unwrap();
-        self.worker.join().unwrap();
+        self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
+            warn!("unexpected error while sending shutdown message to fsuipc domain: {}", e);
+        });
+        self.worker.join().unwrap_or_else(|_| {
+            warn!("unexpected error while waiting for fsuipc domain worker thread");
+        });
     }
 
     pub fn consumer(&self) -> Consumer {
@@ -93,11 +98,11 @@ struct Context {
 }
 
 impl Context {
-    pub fn new()  -> Context {
-        Context {
-            handle: fsuipc::local::LocalHandle::new().unwrap(),
+    pub fn new()  -> io::Result<Context> {
+        Ok(Context {
+            handle: try!(fsuipc::local::LocalHandle::new()),
             observers: Vec::new(),
-        }
+        })
     }
 
     fn process_write(&mut self, offset: Offset, value: Value) {
@@ -134,7 +139,13 @@ fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
     let tx = event_loop.channel();
     let worker = thread::spawn(move || {
         let mut event_loop = event_loop;
-        let mut ctx = Context::new();
+        let mut ctx = match Context::new() {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                error!("cannot create FSUIPC context (is FSUIPC installed & running?): {}", e);
+                return;
+            },
+        };
         event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
         event_loop.run(&mut ctx).unwrap();
     });
