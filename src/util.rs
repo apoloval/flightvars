@@ -67,6 +67,21 @@ impl<T, C, F> Consume for ConsumeMap<T, C, F> where C: Consume, F: FnMut(T) -> C
     }
 }
 
+pub struct SinkConsumer<T> {
+    _phantom: PhantomData<T>
+}
+
+impl<T> Consume for SinkConsumer<T> {
+    type Item = T;
+    type Error = ();
+
+    fn consume(&mut self, value: T) -> Result<(), Self::Error> { Ok(()) }
+}
+
+pub fn sink_consumer<T>() -> SinkConsumer<T> {
+    SinkConsumer { _phantom: PhantomData }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
