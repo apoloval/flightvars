@@ -9,6 +9,7 @@ hex = "0.1"
 libc = "*"
 log = "0.3"
 log4rs = "0.3"
+mio = "0.5"
 ws2_32-sys = "0.2"
 
 [lib]
