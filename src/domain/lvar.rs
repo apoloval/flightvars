@@ -31,16 +31,18 @@ pub struct Domain {
 
 impl Domain {
     pub fn new() -> Domain {
+        info!("initializing LVAR domain");
         let (worker, tx) = spawn_worker();
         Domain { worker: worker, tx: tx }
     }
 
     pub fn shutdown(self) {
+        info!("shutting down LVAR domain");
         self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
-            warn!("unexpected error while sending shutdown message to lvar domain: {}", e);
+            warn!("unexpected error while sending shutdown message to LVAR domain: {}", e);
         });
         self.worker.join().unwrap_or_else(|_| {
-            warn!("unexpected error while waiting for lvar domain worker thread");
+            warn!("unexpected error while waiting for LVAR domain worker thread");
         });
     }
 

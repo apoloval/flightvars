@@ -138,6 +138,7 @@ where T: comm::Transport + Send + 'static,
         loop {
             match listener.listen() {
                 Ok((input, output)) => {
+                    info!("accepting a new connection from {}", input.id());
                     let conn = spawn_connection(input, output, domain.clone(), &proto);
                     connections.push(conn);
                 },

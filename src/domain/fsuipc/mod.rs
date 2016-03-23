@@ -34,11 +34,13 @@ pub struct Domain {
 
 impl Domain {
     pub fn new() -> Domain {
+        info!("initializing FSUIPC domain");
         let (worker, tx) = spawn_worker();
         Domain { worker: worker, tx: tx }
     }
 
     pub fn shutdown(self) {
+        info!("shutting down FSUIPC domain");
         self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
             warn!("unexpected error while sending shutdown message to FSUIPC domain: {}", e);
         });

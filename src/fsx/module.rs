@@ -48,6 +48,7 @@ impl Module {
         info!("Stopping FlightVars module");
         for port in self.oacsp_tcp { port.shutdown(); }
         for dom in self.fsuipc { dom.shutdown(); }
+        for dom in self.lvar { dom.shutdown(); }
         info!("FlightVars module stopped successfully");
     }
 }
