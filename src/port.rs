@@ -119,8 +119,10 @@ struct Connection<I: comm::Interrupt> {
 
 impl<I: comm::Interrupt> Connection<I> {
     pub fn shutdown(self) {
-        self.reader.shutdown();
+        info!("shutting down writer worker");
         self.writer.shutdown();
+        info!("shutting down reader worker");
+        self.reader.shutdown();
     }
 }
 
@@ -142,7 +144,14 @@ where T: comm::Transport + Send + 'static,
                     let conn = spawn_connection(input, output, domain.clone(), &proto);
                     connections.push(conn);
                 },
-                Err(_) => break,
+                Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
+                    debug!("connection listener interrupted, closing");
+                    break;
+                },
+                Err(e) => {
+                    error!("unexpected error while listening for new connections: {}", e);
+                    break;
+                },
             }
         }
         for conn in connections {
@@ -180,8 +189,8 @@ where R: proto::CommandRead + Send + 'static,
         loop {
             let msg = match reader.read_cmd() {
                 Ok(msg) => msg,
-                Err(ref e) if e.kind() == io::ErrorKind::ConnectionReset => {
-                    info!("connection reset: terminating reader thread");
+                Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
+                    debug!("connection reset: terminating reader worker thread");
                     return;
                 },
                 Err(ref e) => {
@@ -201,6 +210,7 @@ where W: proto::EventWrite + Send + 'static {
         loop {
             let msg = output.recv().unwrap();
             if msg == Event::Close {
+                debug!("terminating writer worker thread");
                 return;
             }
             writer.write_ev(&msg).unwrap();

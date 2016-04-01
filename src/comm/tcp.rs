@@ -183,7 +183,12 @@ pub mod win {
 
     impl Interrupt for TcpInterruptor {
         fn interrupt(self) {
-            unsafe { ws2_32::closesocket(self.socket); }
+            unsafe {
+                if ws2_32::closesocket(self.socket) != 0 {
+                    let error_code = ws2_32::WSAGetLastError();
+                    error!("unexpected error while closing TCP socket: error code {}", error_code);
+                }
+            }
         }
     }
 }

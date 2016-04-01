@@ -44,6 +44,7 @@ impl Domain {
         self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
             warn!("unexpected error while sending shutdown message to FSUIPC domain: {}", e);
         });
+        debug!("shutdown message was sent to the event loop");
         self.worker.join().unwrap_or_else(|_| {
             warn!("unexpected error while waiting for FSUIPC domain worker thread");
         });
@@ -155,8 +156,15 @@ fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
                 return;
             },
         };
-        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
-        event_loop.run(&mut ctx).unwrap();
+        if let Err(e) = event_loop.timeout_ms((), POLLING_DELAY_MS) {
+            error!("cannot register timeout for FSUIPC polling: {:?}", e);
+            return;
+        }
+        if let Err(e) = event_loop.run(&mut ctx) {
+            error!("cannot run event loop FSUIPC domain: {}", e);
+            return;
+        }
+        debug!("terminating FSUIPC domain worker thread");
     });
     (worker, tx)
 }
@@ -174,7 +182,9 @@ impl mio::Handler for Context {
         for obs in self.observers.iter_mut() {
             obs.trigger_event();
         }
-        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
+        if event_loop.is_running() {
+            event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
+        }
     }
 
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
@@ -188,7 +198,7 @@ impl mio::Handler for Context {
                 self.process_obs(offset, client)
             },
             Envelope::Shutdown => {
-                info!("shutting down FSUIPC domain event loop");
+                debug!("shutting down FSUIPC domain event loop");
                 event_loop.shutdown();
             },
             other => {
