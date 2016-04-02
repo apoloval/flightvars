@@ -12,9 +12,11 @@ pub mod fsuipc;
 pub mod lvar;
 pub mod notify;
 pub mod types;
+pub mod worker;
 
 pub use self::notify::*;
 pub use self::types::*;
+pub use self::worker::*;
 
 pub struct DomainRouter<F, L>
 where F: Consume<Item=Command>,
