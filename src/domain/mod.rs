@@ -10,8 +10,10 @@ use util::Consume;
 
 pub mod fsuipc;
 pub mod lvar;
+pub mod notify;
 pub mod types;
 
+pub use self::notify::*;
 pub use self::types::*;
 
 pub struct DomainRouter<F, L>
