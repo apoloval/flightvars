@@ -7,67 +7,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::io;
-use std::thread;
 
 use fsuipc;
 use fsuipc::{Handle, Session};
-use mio;
 
 use domain::types::*;
+use domain::worker;
 use util::Consume;
 
 pub mod types;
 pub use self::types::*;
-
-const POLLING_DELAY_MS: u64 = 50;
-
-#[derive(Debug)]
-pub enum Envelope {
-    Cmd(Command),
-    Shutdown
-}
-
-pub struct Domain {
-    worker: thread::JoinHandle<()>,
-    tx: mio::Sender<Envelope>
-}
-
-impl Domain {
-    pub fn new() -> Domain {
-        info!("initializing FSUIPC domain");
-        let (worker, tx) = spawn_worker();
-        Domain { worker: worker, tx: tx }
-    }
-
-    pub fn shutdown(self) {
-        info!("shutting down FSUIPC domain");
-        self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
-            warn!("unexpected error while sending shutdown message to FSUIPC domain: {}", e);
-        });
-        debug!("shutdown message was sent to the event loop");
-        self.worker.join().unwrap_or_else(|_| {
-            warn!("unexpected error while waiting for FSUIPC domain worker thread");
-        });
-    }
-
-    pub fn consumer(&self) -> Consumer {
-        Consumer { tx: self.tx.clone() }
-    }
-}
-
-#[derive(Clone)]
-pub struct Consumer {
-    tx: mio::Sender<Envelope>
-}
-
-impl Consume for Consumer {
-    type Item = Command;
-    type Error = mio::NotifyError<Envelope>;
-    fn consume(&mut self, cmd: Command) -> Result<(), mio::NotifyError<Envelope>> {
-        self.tx.send(Envelope::Cmd(cmd))
-    }
-}
-
 
 struct Observer {
     offset: Offset,
@@ -101,19 +50,12 @@ impl Observer {
     }
 }
 
-struct Context {
+pub struct Handler {
     handle: fsuipc::local::LocalHandle,
     observers: Vec<Observer>,
 }
 
-impl Context {
-    pub fn new()  -> io::Result<Context> {
-        Ok(Context {
-            handle: try!(fsuipc::local::LocalHandle::new()),
-            observers: Vec::new(),
-        })
-    }
-
+impl Handler {
     fn process_write(&mut self, offset: Offset, value: Value) -> io::Result<()> {
         debug!("writing value {} to offset {}", value, offset);
         match offset.len() {
@@ -144,36 +86,33 @@ impl Context {
     }
 }
 
-fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
-    let event_loop = mio::EventLoop::new().unwrap();
-    let tx = event_loop.channel();
-    let worker = thread::spawn(move || {
-        let mut event_loop = event_loop;
-        let mut ctx = match Context::new() {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                error!("cannot create FSUIPC context (is FSUIPC installed & running?): {}", e);
-                return;
+impl worker::Handle for Handler {
+    fn new() -> Handler {
+        // TODO: do not unwrap here
+        let handle = fsuipc::local::LocalHandle::new().unwrap();
+        Handler {
+            handle: handle,
+            observers: Vec::new(),
+        }
+    }
+
+    fn command(&mut self, cmd: Command) {
+        match cmd {
+            Command::Write(Var::FsuipcOffset(offset), value) => {
+                if let Err(e) = self.process_write(offset, value) {
+                    error!("unexpected IO error while processing write command: {}", e);
+                }
             },
-        };
-        if let Err(e) = event_loop.timeout_ms((), POLLING_DELAY_MS) {
-            error!("cannot register timeout for FSUIPC polling: {:?}", e);
-            return;
+            Command::Observe(Var::FsuipcOffset(offset), client) => {
+                self.process_obs(offset, client)
+            },
+            other => {
+                warn!("FSUIPC domain received an unexpected command: {:?}", other);
+            },
         }
-        if let Err(e) = event_loop.run(&mut ctx) {
-            error!("cannot run event loop FSUIPC domain: {}", e);
-            return;
-        }
-        debug!("terminating FSUIPC domain worker thread");
-    });
-    (worker, tx)
-}
+    }
 
-impl mio::Handler for Context {
-    type Timeout = ();
-    type Message = Envelope;
-
-    fn timeout(&mut self, event_loop: &mut mio::EventLoop<Context>, _: ()) {
+    fn poll(&mut self) {
         let mut session = self.handle.session();
         for obs in self.observers.iter_mut() {
             obs.read(&mut session);
@@ -182,39 +121,5 @@ impl mio::Handler for Context {
         for obs in self.observers.iter_mut() {
             obs.trigger_event();
         }
-        if event_loop.is_running() {
-            event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
-        }
-    }
-
-    fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
-        match msg {
-            Envelope::Cmd(Command::Write(Var::FsuipcOffset(offset), value)) => {
-                if let Err(e) = self.process_write(offset, value) {
-                    error!("unexpected IO error while processing write command: {}", e);
-                }
-            },
-            Envelope::Cmd(Command::Observe(Var::FsuipcOffset(offset), client)) => {
-                self.process_obs(offset, client)
-            },
-            Envelope::Shutdown => {
-                debug!("shutting down FSUIPC domain event loop");
-                event_loop.shutdown();
-            },
-            other => {
-                warn!("FSUIPC domain received an unexpected message: {:?}", other);
-            },
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn should_init_and_shutdown() {
-        let mut domain = Domain::new();
-        domain.shutdown();
     }
 }
