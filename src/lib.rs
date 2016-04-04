@@ -12,7 +12,6 @@ extern crate hex;
 extern crate libc;
 #[macro_use] extern crate log;
 extern crate log4rs;
-extern crate mio;
 extern crate ws2_32;
 
 mod domain;

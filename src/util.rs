@@ -10,8 +10,6 @@ use std::io;
 use std::marker::PhantomData;
 use std::sync::mpsc;
 
-use mio;
-
 pub trait Consume {
     type Item;
     type Error;
@@ -34,18 +32,6 @@ impl<T> Consume for mpsc::Sender<T> {
     fn consume(&mut self, value: T) -> Result<(), Self::Error> {
         self.send(value).map_err(|_| {
             io::Error::new(io::ErrorKind::BrokenPipe, "cannot write to mpsc::Sender")
-        })
-    }
-}
-
-
-impl<T> Consume for mio::Sender<T> where T: Send {
-    type Item = T;
-    type Error = io::Error;
-
-    fn consume(&mut self, value: T) -> Result<(), Self::Error> {
-        self.send(value).map_err(|_| {
-            io::Error::new(io::ErrorKind::BrokenPipe, "cannot write to mio::Sender")
         })
     }
 }
