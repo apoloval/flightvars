@@ -34,7 +34,7 @@ impl Module {
         logging::config_logging();
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
         let fsuipc = domain::fsuipc::Domain::new();
-        let lvar = domain::spawn_worker(domain::lvar::Handler::new());
+        let lvar = domain::spawn_worker::<domain::lvar::Handler>();
         let router = domain::DomainRouter::new(
             fsuipc.consumer(),
             lvar.consumer());

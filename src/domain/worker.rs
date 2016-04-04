@@ -16,6 +16,7 @@ use util::Consume;
 const POLLING_DELAY_MS: u64 = 20;
 
 pub trait Handle {
+    fn new() -> Self;
     fn command(&mut self, cmd: Command);
     fn poll(&mut self);
 }
@@ -99,11 +100,11 @@ impl Consume for Consumer {
     }
 }
 
-pub fn spawn_worker<H: Handle + Send + 'static>(handler: H) -> WorkerStub {
+pub fn spawn_worker<H: Handle>() -> WorkerStub {
     let worker = Worker::new();
     let sender = worker.sender();
     let child = thread::spawn(move || {
-        let mut handler = handler;
+        let mut handler = H::new();
         let mut worker = worker;
         worker.run(&mut handler);
     });
@@ -183,6 +184,7 @@ mod tests {
     }
 
     impl Handle for MockHandle {
+        fn new() -> MockHandle { unimplemented!() }
         fn command(&mut self, cmd: Command) {
             self.commands.send(cmd).unwrap();
         }

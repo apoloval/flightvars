@@ -42,12 +42,6 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn new()  -> Handler {
-        Handler {
-            observers: Vec::new(),
-        }
-    }
-
     fn process_write(&mut self, lvar: &str, value: Value) -> io::Result<()> {
         debug!("writing value {} to lvar {}", value, lvar);
         let id = try!(check_named_variable(lvar).ok_or(io::Error::new(
@@ -68,6 +62,12 @@ impl Handler {
 }
 
 impl worker::Handle for Handler {
+    fn new() -> Handler {
+        Handler {
+            observers: Vec::new(),
+        }
+    }
+
     fn command(&mut self, cmd: Command) {
         match cmd {
             Command::Write(Var::LVar(lvar), value) => {
