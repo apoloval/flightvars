@@ -8,62 +8,12 @@
 
 use std::ffi::CString;
 use std::io;
-use std::thread;
 
 use libc::c_char;
-use mio;
 
 use domain::types::*;
+use domain::worker;
 use util::Consume;
-
-const POLLING_DELAY_MS: u64 = 50;
-
-#[derive(Debug)]
-pub enum Envelope {
-    Cmd(Command),
-    Shutdown
-}
-
-pub struct Domain {
-    worker: thread::JoinHandle<()>,
-    tx: mio::Sender<Envelope>
-}
-
-impl Domain {
-    pub fn new() -> Domain {
-        info!("initializing LVAR domain");
-        let (worker, tx) = spawn_worker();
-        Domain { worker: worker, tx: tx }
-    }
-
-    pub fn shutdown(self) {
-        info!("shutting down LVAR domain");
-        self.tx.send(Envelope::Shutdown).unwrap_or_else(|e| {
-            warn!("unexpected error while sending shutdown message to LVAR domain: {}", e);
-        });
-        self.worker.join().unwrap_or_else(|_| {
-            warn!("unexpected error while waiting for LVAR domain worker thread");
-        });
-    }
-
-    pub fn consumer(&self) -> Consumer {
-        Consumer { tx: self.tx.clone() }
-    }
-}
-
-#[derive(Clone)]
-pub struct Consumer {
-    tx: mio::Sender<Envelope>
-}
-
-impl Consume for Consumer {
-    type Item = Command;
-    type Error = mio::NotifyError<Envelope>;
-    fn consume(&mut self, cmd: Command) -> Result<(), mio::NotifyError<Envelope>> {
-        self.tx.send(Envelope::Cmd(cmd))
-    }
-}
-
 
 struct Observer {
     lvar: String,
@@ -87,13 +37,13 @@ impl Observer {
     }
 }
 
-struct Context {
+pub struct Handler {
     observers: Vec<Observer>,
 }
 
-impl Context {
-    pub fn new()  -> Context {
-        Context {
+impl Handler {
+    pub fn new()  -> Handler {
+        Handler {
             observers: Vec::new(),
         }
     }
@@ -117,43 +67,26 @@ impl Context {
     }
 }
 
-fn spawn_worker() -> (thread::JoinHandle<()>, mio::Sender<Envelope>) {
-    let event_loop = mio::EventLoop::new().unwrap();
-    let tx = event_loop.channel();
-    let worker = thread::spawn(move || {
-        let mut event_loop = event_loop;
-        let mut ctx = Context::new();
-        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
-        event_loop.run(&mut ctx).unwrap();
-    });
-    (worker, tx)
-}
-
-impl mio::Handler for Context {
-    type Timeout = ();
-    type Message = Envelope;
-
-    fn timeout(&mut self, event_loop: &mut mio::EventLoop<Context>, _: ()) {
-        for obs in self.observers.iter_mut() {
-            obs.trigger_event();
-        }
-        event_loop.timeout_ms((), POLLING_DELAY_MS).unwrap();
-    }
-
-    fn notify(&mut self, event_loop: &mut mio::EventLoop<Context>, msg: Envelope) {
-        match msg {
-            Envelope::Cmd(Command::Write(Var::LVar(lvar), value)) => {
+impl worker::Handle for Handler {
+    fn command(&mut self, cmd: Command) {
+        match cmd {
+            Command::Write(Var::LVar(lvar), value) => {
                 if let Err(e) = self.process_write(&lvar, value) {
                     error!("unexpected IO error while writing LVAR {}: {}", lvar, e);
                 }
             },
-            Envelope::Cmd(Command::Observe(Var::LVar(lvar), client)) => {
+            Command::Observe(Var::LVar(lvar), client) => {
                 self.process_obs(&lvar, client);
             },
-            Envelope::Shutdown => event_loop.shutdown(),
             other => {
-                warn!("LVAR domain received an unexpected message: {:?}", other);
+                warn!("LVAR domain received an unexpected command: {:?}", other);
             },
+        }
+    }
+
+    fn poll(&mut self) {
+        for obs in self.observers.iter_mut() {
+            obs.trigger_event();
         }
     }
 }
@@ -296,14 +229,3 @@ pub struct PanelFunctions {
 #[allow(non_upper_case_globals)]
 #[no_mangle]
 pub static mut Panels: *mut PanelFunctions = 0 as *mut PanelFunctions;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn should_init_and_shutdown() {
-        let mut domain = Domain::new();
-        domain.shutdown();
-    }
-}

@@ -19,7 +19,7 @@ struct Module {
     oacsp_tcp: Option<port::TcpPort>,
 
     fsuipc: Option<domain::fsuipc::Domain>,
-    lvar: Option<domain::lvar::Domain>,
+    lvar: Option<domain::WorkerStub>,
 }
 
 impl Module {
@@ -34,7 +34,7 @@ impl Module {
         logging::config_logging();
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
         let fsuipc = domain::fsuipc::Domain::new();
-        let lvar = domain::lvar::Domain::new();
+        let lvar = domain::spawn_worker(domain::lvar::Handler::new());
         let router = domain::DomainRouter::new(
             fsuipc.consumer(),
             lvar.consumer());
