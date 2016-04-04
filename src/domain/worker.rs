@@ -6,14 +6,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::thread;
 use std::time;
 
 use domain::Command;
 use domain::notify::*;
+use util::Consume;
 
 const POLLING_DELAY_MS: u64 = 20;
 
-pub trait Handler {
+pub trait Handle {
     fn command(&mut self, cmd: Command);
     fn poll(&mut self);
 }
@@ -38,7 +40,7 @@ impl Worker {
         self.tx.clone()
     }
 
-    pub fn run<H: Handler>(&mut self, handler: &mut H) {
+    pub fn run<H: Handle>(&mut self, handler: &mut H) {
         self.run = true;
         let timeout = time::Duration::from_millis(POLLING_DELAY_MS);
         while self.run {
@@ -62,6 +64,55 @@ pub enum Envelope {
     Shutdown
 }
 
+pub struct WorkerStub {
+    sender: NotifySender<Envelope>,
+    child: thread::JoinHandle<()>,
+}
+
+impl WorkerStub {
+    pub fn consumer(&self) -> Consumer {
+        Consumer {
+            sender: self.sender.clone(),
+        }
+    }
+
+    pub fn shutdown(self) {
+        if let Err(e) = self.sender.send(Envelope::Shutdown) {
+            error!("unexpected error while shutting down domain worker: {:?}", e);
+        }
+        if let Err(e) = self.child.join() {
+            error!("unexpected error while joining to domain worker thread: {:?}", e);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Consumer {
+    sender: NotifySender<Envelope>,
+}
+
+impl Consume for Consumer {
+    type Item = Command;
+    type Error = NotifyError;
+    fn consume(&mut self, cmd: Command) -> Result<(), NotifyError> {
+        self.sender.send(Envelope::Cmd(cmd))
+    }
+}
+
+pub fn spawn_worker<H: Handle + Send + 'static>(handler: H) -> WorkerStub {
+    let worker = Worker::new();
+    let sender = worker.sender();
+    let child = thread::spawn(move || {
+        let mut handler = handler;
+        let mut worker = worker;
+        worker.run(&mut handler);
+    });
+    WorkerStub {
+        sender: sender,
+        child: child,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
@@ -78,7 +129,7 @@ mod tests {
         let (polling_tx, _) = mpsc::channel();
         let (command_tx, _) = mpsc::channel();
         let child = thread::spawn(move || {
-            let mut handler = MockHandler {
+            let mut handler = MockHandle {
                 pollings: polling_tx,
                 commands: command_tx,
             };
@@ -95,7 +146,7 @@ mod tests {
         let (polling_tx, polling_rx) = mpsc::channel();
         let (command_tx, _) = mpsc::channel();
         let child = thread::spawn(move || {
-            let mut handler = MockHandler {
+            let mut handler = MockHandle {
                 pollings: polling_tx,
                 commands: command_tx,
             };
@@ -113,7 +164,7 @@ mod tests {
         let (polling_tx, _polling_rx) = mpsc::channel();
         let (command_tx, command_rx) = mpsc::channel();
         let child = thread::spawn(move || {
-            let mut handler = MockHandler {
+            let mut handler = MockHandle {
                 pollings: polling_tx,
                 commands: command_tx,
             };
@@ -126,12 +177,12 @@ mod tests {
         assert!(child.join().is_ok());
     }
 
-    struct MockHandler {
+    struct MockHandle {
         pollings: mpsc::Sender<()>,
         commands: mpsc::Sender<Command>,
     }
 
-    impl Handler for MockHandler {
+    impl Handle for MockHandle {
         fn command(&mut self, cmd: Command) {
             self.commands.send(cmd).unwrap();
         }
