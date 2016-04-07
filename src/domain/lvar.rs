@@ -68,6 +68,8 @@ impl worker::Handle for Handler {
         }
     }
 
+    fn description() -> String { "lvar domain handler".to_string() }
+
     fn command(&mut self, cmd: Command) {
         match cmd {
             Command::Write(Var::LVar(lvar), value) => {

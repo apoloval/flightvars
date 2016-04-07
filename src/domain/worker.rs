@@ -17,6 +17,7 @@ const POLLING_DELAY_MS: u64 = 20;
 
 pub trait Handle {
     fn new() -> Self;
+    fn description() -> String;
     fn command(&mut self, cmd: Command);
     fn poll(&mut self);
 }
@@ -44,12 +45,24 @@ impl Worker {
     pub fn run<H: Handle>(&mut self, handler: &mut H) {
         self.run = true;
         let timeout = time::Duration::from_millis(POLLING_DELAY_MS);
+        let desc = H::description();
         while self.run {
             match self.rx.recv_timeout(timeout) {
-                Ok(Some(Envelope::Shutdown)) => self.shutdown(),
-                Ok(Some(Envelope::Cmd(cmd))) => handler.command(cmd),
-                Ok(None) => handler.poll(),
-                _ => {},
+                Ok(Some(Envelope::Shutdown)) => {
+                    debug!("received a shutdown message in {}", desc);
+                    self.shutdown();
+                },
+                Ok(Some(Envelope::Cmd(cmd))) => {
+                    trace!("received a command {:?} for {}", cmd, desc);
+                    handler.command(cmd);
+                },
+                Ok(None) => {
+                    trace!("command reception timed out, polling new data in {}", desc);
+                    handler.poll();
+                }
+                Err(e) => {
+                    error!("unexpected error while receiving messages for {}: {:?}", desc, e);
+                },
             }
         }
     }
@@ -68,6 +81,7 @@ pub enum Envelope {
 pub struct WorkerStub {
     sender: NotifySender<Envelope>,
     child: thread::JoinHandle<()>,
+    description: String,
 }
 
 impl WorkerStub {
@@ -78,9 +92,11 @@ impl WorkerStub {
     }
 
     pub fn shutdown(self) {
+        debug!("sending shutdown message to worker for {}", self.description);
         if let Err(e) = self.sender.send(Envelope::Shutdown) {
             error!("unexpected error while shutting down domain worker: {:?}", e);
         }
+        debug!("waiting termination of worker for {}", self.description);
         if let Err(e) = self.child.join() {
             error!("unexpected error while joining to domain worker thread: {:?}", e);
         }
@@ -106,11 +122,14 @@ pub fn spawn_worker<H: Handle>() -> WorkerStub {
     let child = thread::spawn(move || {
         let mut handler = H::new();
         let mut worker = worker;
+        info!("initiating worker for {}", H::description());
         worker.run(&mut handler);
+        info!("terminating worker for {}", H::description());
     });
     WorkerStub {
         sender: sender,
         child: child,
+        description: H::description(),
     }
 }
 
@@ -185,6 +204,7 @@ mod tests {
 
     impl Handle for MockHandle {
         fn new() -> MockHandle { unimplemented!() }
+        fn description() -> String { "mock domain handler".to_string() }
         fn command(&mut self, cmd: Command) {
             self.commands.send(cmd).unwrap();
         }

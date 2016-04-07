@@ -87,6 +87,9 @@ impl Handler {
 }
 
 impl worker::Handle for Handler {
+
+    fn description() -> String { "fsuipc domain handler".to_string() }
+
     fn new() -> Handler {
         // TODO: do not unwrap here
         let handle = fsuipc::local::LocalHandle::new().unwrap();
@@ -117,7 +120,10 @@ impl worker::Handle for Handler {
         for obs in self.observers.iter_mut() {
             obs.read(&mut session);
         }
-        session.process().unwrap();
+        if let Err(e) = session.process() {
+            error!("unexpected error while processing FSUIPC session: {:?}", e);
+            return;
+        }
         for obs in self.observers.iter_mut() {
             obs.trigger_event();
         }
