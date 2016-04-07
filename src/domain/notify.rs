@@ -32,6 +32,7 @@ pub struct NotifySender<T: Send> {
 impl<T: Send> NotifySender<T> {
     pub fn send(&self, value: T) -> NotifyResult<()> {
         try!(self.tx.send(value));
+        self.sleep.awake();
         Ok(())
     }
 }
@@ -51,14 +52,21 @@ pub struct NotifyReceiver<T: Send> {
 }
 
 impl<T: Send> NotifyReceiver<T> {
-    pub fn recv(&self, timeout: time::Duration) -> NotifyResult<Option<T>> {
+    pub fn recv_timeout(&self, timeout: time::Duration) -> NotifyResult<Option<T>> {
+        let result = self.recv();
+        if let Ok(None) = result {
+            self.sleep.wait(timeout);
+            self.recv()
+        } else {
+            result
+        }
+    }
+
+    pub fn recv(&self) -> NotifyResult<Option<T>> {
         match self.rx.try_recv() {
-            Ok(msg) => return Ok(Some(msg)),
-            Err(mpsc::TryRecvError::Disconnected) => return Err(NotifyError),
-            Err(mpsc::TryRecvError::Empty) => {
-                self.sleep.wait(timeout);
-                Ok(None)
-            },
+            Ok(msg) => Ok(Some(msg)),
+            Err(mpsc::TryRecvError::Disconnected) => Err(NotifyError),
+            Err(mpsc::TryRecvError::Empty) => Ok(None),
         }
     }
 }
@@ -74,6 +82,10 @@ impl Sleep {
             mutex: sync::Mutex::new(()),
             condition: sync::Condvar::new(),
         }
+    }
+
+    pub fn awake(&self) {
+        self.condition.notify_all();
     }
 
     pub fn wait(&self, timeout: time::Duration) -> sync::WaitTimeoutResult {
@@ -109,7 +121,7 @@ mod tests {
         let (tx, rx) = notification();
         let (echo_tx, echo_rx) = mpsc::channel();
         let child = thread::spawn(move || {
-            let msg = rx.recv(time::Duration::new(1, 0)).unwrap();
+            let msg = rx.recv_timeout(time::Duration::new(1, 0)).unwrap();
             echo_tx.send(msg);
         });
         assert!(tx.send(42).is_ok());
@@ -122,7 +134,7 @@ mod tests {
         let (tx, rx) = notification::<isize>();
         let (echo_tx, echo_rx) = mpsc::channel();
         let child = thread::spawn(move || {
-            let msg = rx.recv(time::Duration::from_millis(50)).unwrap();
+            let msg = rx.recv_timeout(time::Duration::from_millis(50)).unwrap();
             echo_tx.send(msg);
         });
         assert_eq!(echo_rx.recv().unwrap(), None);
@@ -136,7 +148,7 @@ mod tests {
         {
             let (tx, rx) = notification::<isize>();
             child = thread::spawn(move || {
-                let result = rx.recv(time::Duration::from_millis(50));
+                let result = rx.recv_timeout(time::Duration::from_millis(50));
                 echo_tx.send(result);
             });
         }

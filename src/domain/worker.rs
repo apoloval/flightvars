@@ -45,7 +45,7 @@ impl Worker {
         self.run = true;
         let timeout = time::Duration::from_millis(POLLING_DELAY_MS);
         while self.run {
-            match self.rx.recv(timeout) {
+            match self.rx.recv_timeout(timeout) {
                 Ok(Some(Envelope::Shutdown)) => self.shutdown(),
                 Ok(Some(Envelope::Cmd(cmd))) => handler.command(cmd),
                 Ok(None) => handler.poll(),
