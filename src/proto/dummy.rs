@@ -16,6 +16,7 @@ use proto;
 pub enum DummyCommand {
     Observe(Var),
     Write(Var, Value),
+    Close,
 }
 
 impl DummyCommand {
@@ -23,6 +24,7 @@ impl DummyCommand {
         match self {
             DummyCommand::Observe(var) => Command::Observe(var, id),
             DummyCommand::Write(var, val) => Command::Write(var, val),
+            DummyCommand::Close => Command::Close(id),
         }
     }
 }
@@ -32,6 +34,7 @@ impl From<Command> for DummyCommand {
         match cmd {
             Command::Observe(var, _) => DummyCommand::Observe(var),
             Command::Write(var, val) => DummyCommand::Write(var, val),
+            Command::Close(_) => DummyCommand::Close,
         }
     }
 }

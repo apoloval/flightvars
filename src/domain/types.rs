@@ -110,13 +110,15 @@ impl fmt::Display for Value {
 pub enum Command {
     Observe(Var, Client),
     Write(Var, Value),
+    Close(Client),
 }
 
 impl Command {
-    pub fn var(&self) -> &Var {
+    pub fn var(&self) -> Option<&Var> {
         match self {
-            &Command::Observe(ref v, _) => v,
-            &Command::Write(ref v, _) => v,
+            &Command::Observe(ref v, _) => Some(v),
+            &Command::Write(ref v, _) => Some(v),
+            _ => None,
         }
     }
 

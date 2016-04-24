@@ -48,8 +48,13 @@ where F: Consume<Item=Command>,
     type Error = ();
     fn consume(&mut self, cmd: Command) -> Result<(), ()> {
         match cmd.var() {
-            &Var::LVar(_) => Ok(self.lvar.consume(cmd).unwrap_or(())),
-            &Var::FsuipcOffset(_) => Ok(self.fsuipc.consume(cmd).unwrap_or(())),
+            Some(&Var::LVar(_)) => Ok(self.lvar.consume(cmd).unwrap_or(())),
+            Some(&Var::FsuipcOffset(_)) => Ok(self.fsuipc.consume(cmd).unwrap_or(())),
+            _ => {
+                self.lvar.consume(cmd.clone()).unwrap_or(());
+                self.fsuipc.consume(cmd).unwrap_or(());
+                Ok(())
+            },
         }
     }
 }
