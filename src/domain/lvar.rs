@@ -59,6 +59,11 @@ impl Handler {
             retain: None,
         });
     }
+    
+    fn clean_obs(&mut self, client: Client) {
+    	info!("cleaning up observers for client {}", client.name());
+    	self.observers.retain(|o| o.client != client);
+    }
 }
 
 impl worker::Handle for Handler {
@@ -79,6 +84,9 @@ impl worker::Handle for Handler {
             },
             Command::Observe(Var::LVar(lvar), client) => {
                 self.process_obs(&lvar, client);
+            },
+            Command::Close(client) => {
+            	self.clean_obs(client);
             },
             other => {
                 warn!("LVAR domain received an unexpected command: {:?}", other);

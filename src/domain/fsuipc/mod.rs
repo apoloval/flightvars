@@ -84,6 +84,11 @@ impl Handler {
         try!(session.process());
         Ok(())
     }
+    
+    fn clean_obs(&mut self, client: Client) {
+    	trace!("cleaning up observers for client {}", client.name());
+    	self.observers.retain(|o| o.client != client);
+    }
 }
 
 impl worker::Handle for Handler {
@@ -109,10 +114,12 @@ impl worker::Handle for Handler {
             Command::Observe(Var::FsuipcOffset(offset), client) => {
                 self.process_obs(offset, client)
             },
-            other => {
-                warn!("FSUIPC domain received an unexpected command: {:?}", other);
+            Command::Close(client) => {
+            	self.clean_obs(client);
             },
-        }
+			other =>
+				warn!("FSUIPC domain received an unexpected command: {:?}", other),
+    	}
     }
 
     fn poll(&mut self) {
