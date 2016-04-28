@@ -85,9 +85,9 @@ impl Handler {
         Ok(())
     }
     
-    fn clean_obs(&mut self, client: Client) {
-    	trace!("cleaning up observers for client {}", client.name());
-    	self.observers.retain(|o| o.client != client);
+    fn clean_obs(&mut self, client: ClientName) {
+    	trace!("cleaning up observers for client {}", client);
+    	self.observers.retain(|o| o.client.name() != client);
     }
 }
 

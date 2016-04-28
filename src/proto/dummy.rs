@@ -24,7 +24,7 @@ impl DummyCommand {
         match self {
             DummyCommand::Observe(var) => Command::Observe(var, id),
             DummyCommand::Write(var, val) => Command::Write(var, val),
-            DummyCommand::Close => Command::Close(id),
+            DummyCommand::Close => Command::Close(id.name().to_string()),
         }
     }
 }

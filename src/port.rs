@@ -187,10 +187,13 @@ where R: proto::CommandRead + Send + 'static,
       D: Consume<Item=Command> + Send + 'static, {
     thread::spawn(move || {
         loop {
-            let msg = match reader.read_cmd() {
-                Ok(msg) => msg,
+            match reader.read_cmd() {
+                Ok(msg) => {
+		            domain.consume(msg);
+                },
                 Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
                     debug!("connection reset: terminating reader worker thread");
+                    //domain.consume(Command::Close(
                     return;
                 },
                 Err(ref e) => {
@@ -198,7 +201,6 @@ where R: proto::CommandRead + Send + 'static,
                     return;
                 },
             };
-            domain.consume(msg);
         }
     })
 }

@@ -8,13 +8,14 @@
 
 use std::fmt;
 use std::io;
-use std::str;
 use std::sync::mpsc;
 
 use domain::fsuipc::Offset;
 
+pub type ClientName = String;
+
 #[derive(Clone)]
-pub struct Client(String, EventSender);
+pub struct Client(ClientName, EventSender);
 
 impl Client {
     pub fn new(s: &str, sender: EventSender) -> Client { Client(s.to_string(), sender) }
@@ -110,7 +111,7 @@ impl fmt::Display for Value {
 pub enum Command {
     Observe(Var, Client),
     Write(Var, Value),
-    Close(Client),
+    Close(ClientName),
 }
 
 impl Command {
