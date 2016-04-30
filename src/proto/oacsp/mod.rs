@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn should_fail_consume_close_event() {
-        let (tx, rx) = mpsc::channel();
+        let (tx, _rx) = mpsc::channel();
         let mut writer = EventWriter::new(tx);
         let err = writer.write_ev(&Event::Close).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);

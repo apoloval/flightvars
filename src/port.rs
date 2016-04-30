@@ -66,11 +66,16 @@ impl TcpPort {
     }
 }
 
+#[cfg(test)]
 pub type DummyPort = Port<comm::dummy::ListenerEventSender<proto::dummy::DummyCommand, Event>>;
+#[cfg(test)]
 pub type DummyPortListener = comm::dummy::ListenerEventSender<Command, Event>;
+#[cfg(test)]
 pub type DummyPortInput = comm::dummy::StreamEventSender<proto::dummy::DummyCommand>;
+#[cfg(test)]
 pub type DummyPortOutput = comm::dummy::MessageReceiver<Event>;
 
+#[cfg(test)]
 impl DummyPort {
     pub fn new<D>(domain: D) -> DummyPort
     where D: Consume<Item=Command> + Clone + Send + 'static {

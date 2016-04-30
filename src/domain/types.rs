@@ -43,6 +43,7 @@ pub enum Var {
 }
 
 impl Var {
+	#[cfg(test)]
     pub fn lvar(n: &str) -> Var { Var::LVar(n.to_string()) }
 }
 
@@ -56,7 +57,7 @@ pub enum Value {
 
 impl Value {
     pub fn parse_int(s: &str) -> io::Result<Value> {
-        let parsed = try!(s.parse().map_err(|e| io::Error::new(
+        let parsed = try!(s.parse().map_err(|_| io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("cannot parse integer value from '{}'", s)
         )));
@@ -64,7 +65,7 @@ impl Value {
     }
 
     pub fn parse_uint(s: &str) -> io::Result<Value> {
-        let parsed = try!(s.parse().map_err(|e| io::Error::new(
+        let parsed = try!(s.parse().map_err(|_| io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("cannot parse unsigned integer value from '{}'", s)
         )));
@@ -123,6 +124,7 @@ impl Command {
         }
     }
 
+	#[cfg(test)]
     pub fn client(&self) -> Option<&Client> {
         match self {
             &Command::Observe(_, ref c) => Some(c),

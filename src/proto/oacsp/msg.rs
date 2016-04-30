@@ -61,10 +61,12 @@ pub enum OutputMessage {
 }
 
 impl OutputMessage {
+	#[cfg(test)]
     pub fn event_lvar(lvar: &str, value: Value) -> OutputMessage {
         OutputMessage::EventLvar { lvar: lvar.to_string(), value: value }
     }
 
+	#[cfg(test)]
     pub fn event_offset(offset: OffsetAddr, value: Value) -> OutputMessage {
         OutputMessage::EventOffset { offset: offset, value: value }
     }

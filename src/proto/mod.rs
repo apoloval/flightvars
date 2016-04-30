@@ -11,7 +11,7 @@ use std::io;
 use domain::{Client, Command, Event};
 
 pub mod oacsp;
-pub mod dummy;
+#[cfg(test)] pub mod dummy;
 
 pub trait CommandRead {
     fn read_cmd(&mut self) -> io::Result<Command>;
@@ -35,4 +35,4 @@ pub trait BidirProtocol<T> : Protocol<T, T> {}
 impl<T, P: Protocol<T, T>> BidirProtocol<T> for P {}
 
 pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }
-pub fn dummy() -> dummy::DummyProtocol { dummy::DummyProtocol }
+#[cfg(test)] pub fn dummy() -> dummy::DummyProtocol { dummy::DummyProtocol }

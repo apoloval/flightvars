@@ -75,7 +75,7 @@ mod tests {
         let cmd = Command::Write(
             Var::FsuipcOffset(Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord)),
             Value::Bool(true));
-        router.consume(cmd.clone());
+        router.consume(cmd.clone()).unwrap();
         assert_eq!(rx.recv().unwrap(), cmd);
     }
 }

@@ -13,7 +13,6 @@ use libc::c_char;
 
 use domain::types::*;
 use domain::worker;
-use util::Consume;
 
 struct Observer {
     lvar: String,
@@ -132,10 +131,6 @@ fn set_named_variable_value(id: Id, value: f64) {
         let func = (*Panels).set_named_variable_value;
         (func)(id, value)
     }
-}
-
-fn is_initialized() -> bool {
-    unsafe { !Panels.is_null() }
 }
 
 /// This struct declares all panel related functions exported by FSX/P3D.

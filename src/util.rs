@@ -13,16 +13,7 @@ use std::sync::mpsc;
 pub trait Consume {
     type Item;
     type Error;
-    fn consume(&mut self, value: Self::Item) -> Result<(), Self::Error>;
-
-    fn map<T, F>(self, f: F) -> ConsumeMap<T, Self, F>
-    where F: FnMut(T) -> Self::Item, Self: Sized {
-        ConsumeMap {
-            _phantom: PhantomData,
-            consumer: self,
-            mapping: f
-        }
-    }
+    fn consume(&mut self, value: Self::Item) -> Result<(), Self::Error>;    
 }
 
 impl<T> Consume for mpsc::Sender<T> {
@@ -36,23 +27,6 @@ impl<T> Consume for mpsc::Sender<T> {
     }
 }
 
-
-pub struct ConsumeMap<T, C, F> where C: Consume, F: FnMut(T) -> C::Item {
-    _phantom: PhantomData<T>,
-    consumer: C,
-    mapping: F
-}
-
-impl<T, C, F> Consume for ConsumeMap<T, C, F> where C: Consume, F: FnMut(T) -> C::Item {
-    type Item = T;
-    type Error = C::Error;
-
-    fn consume(&mut self, value: T) -> Result<(), Self::Error> {
-        let mapped = (self.mapping)(value);
-        self.consumer.consume(mapped)
-    }
-}
-
 #[derive(Clone)]
 pub struct SinkConsumer<T> {
     _phantom: PhantomData<T>
@@ -62,24 +36,11 @@ impl<T> Consume for SinkConsumer<T> {
     type Item = T;
     type Error = ();
 
-    fn consume(&mut self, value: T) -> Result<(), Self::Error> { Ok(()) }
+    fn consume(&mut self, _: T) -> Result<(), Self::Error> { Ok(()) }
 }
 
+#[cfg(test)]
 pub fn sink_consumer<T>() -> SinkConsumer<T> {
     SinkConsumer { _phantom: PhantomData }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::sync::mpsc;
-
-    use super::*;
-
-    #[test]
-    fn should_map_consumer() {
-        let (tx, rx) = mpsc::channel::<usize>();
-        let mut mapped = tx.map(|s: &str| s.len());
-        mapped.consume("foobar");
-        assert_eq!(rx.recv().unwrap(), 6);
-    }
-}

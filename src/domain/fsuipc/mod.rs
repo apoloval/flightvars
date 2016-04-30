@@ -13,7 +13,6 @@ use fsuipc::{Handle, Session};
 
 use domain::types::*;
 use domain::worker;
-use util::Consume;
 
 pub mod types;
 pub use self::types::*;

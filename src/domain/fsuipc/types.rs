@@ -153,7 +153,7 @@ impl str::FromStr for Offset {
         if pair.len() == 2 {
             let addr = try!(OffsetAddr::from_hex(pair[0]));
             let len = try!(OffsetLen::from_str(pair[1]));
-            Ok(Offset(addr, len))
+            Ok(Offset::new(addr, len))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::InvalidInput,

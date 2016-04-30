@@ -246,7 +246,7 @@ mod tests {
         let mut listener = TcpListener::bind("127.0.0.1:1236").unwrap();
         let interruption = listener.shutdown_interruption();
         let client = thread::spawn(move || {
-            let conn = net::TcpStream::connect("127.0.0.1:1236");
+            let _conn = net::TcpStream::connect("127.0.0.1:1236");
             thread::sleep(time::Duration::from_millis(50));
         });
         let child = thread::spawn(move || {

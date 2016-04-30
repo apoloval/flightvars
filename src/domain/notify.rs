@@ -122,7 +122,7 @@ mod tests {
         let (echo_tx, echo_rx) = mpsc::channel();
         let child = thread::spawn(move || {
             let msg = rx.recv_timeout(time::Duration::new(1, 0)).unwrap();
-            echo_tx.send(msg);
+            echo_tx.send(msg).unwrap();
         });
         assert!(tx.send(42).is_ok());
         assert_eq!(echo_rx.recv().unwrap(), Some(42));
@@ -131,11 +131,11 @@ mod tests {
 
     #[test]
     fn should_timeout_if_no_msg_was_received() {
-        let (tx, rx) = notification::<isize>();
+        let (_tx, rx) = notification::<isize>();
         let (echo_tx, echo_rx) = mpsc::channel();
         let child = thread::spawn(move || {
             let msg = rx.recv_timeout(time::Duration::from_millis(50)).unwrap();
-            echo_tx.send(msg);
+            echo_tx.send(msg).unwrap();
         });
         assert_eq!(echo_rx.recv().unwrap(), None);
         assert!(child.join().is_ok());
@@ -144,12 +144,12 @@ mod tests {
     #[test]
     fn should_fail_when_producer_is_closed() {
         let (echo_tx, echo_rx) = mpsc::channel();
-        let mut child;
+        let child;
         {
-            let (tx, rx) = notification::<isize>();
+            let (_tx, rx) = notification::<isize>();
             child = thread::spawn(move || {
                 let result = rx.recv_timeout(time::Duration::from_millis(50));
-                echo_tx.send(result);
+                echo_tx.send(result).unwrap();
             });
         }
         assert_eq!(echo_rx.recv().unwrap().unwrap_err(), NotifyError);

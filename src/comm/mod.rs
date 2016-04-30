@@ -44,7 +44,8 @@
 use std::io;
 
 pub mod tcp;
-pub mod dummy;
+
+#[cfg(test)] pub mod dummy;
 
 /// An object able to interrupt a communication process.
 ///
