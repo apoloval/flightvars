@@ -167,6 +167,7 @@ where I: comm::ShutdownInterruption + comm::Identify,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
     let (reply_tx, reply_rx) = mpsc::channel();
+    let client_name = input.id().to_string();
     let id = Client::new(&input.id(), reply_tx.clone());
     let mut reader_stream = input;
     let reader_interruption = reader_stream.shutdown_interruption();
@@ -174,7 +175,7 @@ where I: comm::ShutdownInterruption + comm::Identify,
     let writer_stream = output;
     let writer_interruption = reply_tx;
     let msg_writer = proto.writer(writer_stream);
-    let reader = spawn_reader(msg_reader, domain);
+    let reader = spawn_reader(msg_reader, domain, client_name);
     let writer = spawn_writer(msg_writer, reply_rx);
     Connection {
         reader: Worker { thread: reader, interruption: reader_interruption },
@@ -182,22 +183,29 @@ where I: comm::ShutdownInterruption + comm::Identify,
     }
 }
 
-fn spawn_reader<R, D>(mut reader: R, mut domain: D) -> thread::JoinHandle<()>
+fn spawn_reader<R, D>(
+	mut reader: R, 
+	mut domain: D, 
+	client_name: ClientName) -> thread::JoinHandle<()>
 where R: proto::CommandRead + Send + 'static,
       D: Consume<Item=Command> + Send + 'static, {
     thread::spawn(move || {
         loop {
             match reader.read_cmd() {
                 Ok(msg) => {
-		            domain.consume(msg);
-                },
-                Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
-                    debug!("connection reset: terminating reader worker thread");
-                    //domain.consume(Command::Close(
-                    return;
+		            if let Err(_) = domain.consume(msg) {
+		            	error!("unexpected error while consuming message");
+		            }
                 },
                 Err(ref e) => {
-                    error!("unexpected error ocurred, terminating reader thread: {}", e);
+                	if e.kind() == io::ErrorKind::ConnectionAborted {
+                    	debug!("connection reset: terminating reader worker thread");
+                	} else {
+	                    error!("unexpected error ocurred, terminating reader thread: {}", e);
+                	}
+                    if let Err(_) = domain.consume(Command::Close(client_name)) {
+                    	error!("unexpected error while consuming close message");
+                    }
                     return;
                 },
             };
