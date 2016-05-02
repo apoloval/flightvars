@@ -6,6 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::fmt;
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic;
@@ -21,22 +22,22 @@ use proto;
 use util::Consume;
 
 
-pub fn spawn_listener<T, D, P>(mut transport: T,
+pub fn spawn_listener<L, D, P>(listener: L,
                         domain: D,
                         proto: P) -> thread::JoinHandle<()>
-where T: comm::Transport + Send + 'static,
+where L: comm::Listen + Send + 'static,
       D: Consume<Item=Command> + Clone + Send + 'static,
-      P: proto::Protocol<T::Input, T::Output> + Send + 'static,
+      P: proto::Protocol<L::Input, L::Output> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
     thread::spawn(move || {
         let mut connections = vec![];
-        let listener = transport.listener();
+        let mut listener = listener;
         loop {
             match listener.listen() {
-                Ok((input, output)) => {
-                    info!("accepting a new connection from {}", input.id());
-                    let conn = spawn_connection(input, output, domain.clone(), &proto);
+                Ok((input, output, addr)) => {
+                    info!("accepting a new connection from {}", addr);
+                    let conn = spawn_connection(input, output, addr, domain.clone(), &proto);
                     connections.push(conn);
                 },
                 Err(ref e) if e.kind() == io::ErrorKind::ConnectionAborted => {
@@ -55,16 +56,16 @@ where T: comm::Transport + Send + 'static,
     })
 }
 
-fn spawn_connection<I, O, D, P>(input: I, output: O, domain: D, proto: &P) -> Connection
-where I: comm::Identify,
+fn spawn_connection<I, O, A, D, P>(input: I, output: O, addr: A, domain: D, proto: &P) -> Connection
+where A: fmt::Display,
       D: Consume<Item=Command> + Send + 'static,
       P: proto::Protocol<I, O> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
     let reader_stop_signal = Arc::new(AtomicBool::new(false));
     let (writer_tx, writer_rx) = mpsc::channel();
-    let client_name = input.id().to_string();
-    let id = Client::new(&input.id(), writer_tx.clone());
+    let client_name = addr.to_string();
+    let id = Client::new(&client_name, writer_tx.clone());
     let msg_reader = proto.reader(input, id);
     let msg_writer = proto.writer(output);
     let reader = spawn_reader(msg_reader, domain, client_name, reader_stop_signal.clone());

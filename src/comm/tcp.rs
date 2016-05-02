@@ -14,16 +14,6 @@ use comm::*;
 
 const READ_TIMEOUT: u64 = 250;
 
-#[derive(Debug)]
-pub struct TcpInput(net::TcpStream);
-
-impl TcpInput {
-	pub fn new(stream: net::TcpStream) -> io::Result<TcpInput> {
-		try!(stream.set_read_timeout(Some(Duration::from_millis(READ_TIMEOUT))));
-		Ok(TcpInput(stream))
-	}
-}
-
 #[cfg(unix)]
 impl io::Read for TcpInput {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -35,37 +25,6 @@ impl io::Read for TcpInput {
     }
 }
 
-#[cfg(windows)]
-impl io::Read for TcpInput {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
-    }
-}
-
-impl ShutdownInterruption for TcpInput {
-    type Int = TcpInterruptor;
-
-    fn shutdown_interruption(&mut self) -> TcpInterruptor {
-        TcpInterruptor::from_stream(&self.0)
-    }
-}
-
-impl Identify for TcpInput {
-    fn id(&self) -> String {
-        self.0.peer_addr()
-            .map(|a| format!("{}", a))
-            .unwrap_or_else(|_| format!("{:?}", self.0))
-    }
-}
-
-#[derive(Debug)]
-pub struct TcpOutput(net::TcpStream);
-
-impl io::Write for TcpOutput {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> { self.0.write(buf) }
-    fn flush(&mut self) -> io::Result<()> { self.0.flush() }
-}
-
 
 pub struct TcpListener(net::TcpListener);
 
@@ -75,14 +34,13 @@ impl TcpListener {
     }
 
     #[cfg(unix)]
-    fn accept(&mut self) -> io::Result<net::TcpStream> {
-        self.0.accept().map(|(s, _)| s)
+    fn accept(&mut self) -> io::Result<(net::TcpStream, net::SocketAddr)> {
+        self.0.accept()
     }
 
     #[cfg(windows)]
-    fn accept(&mut self) -> io::Result<net::TcpStream> {
+    fn accept(&mut self) -> io::Result<(net::TcpStream, net::SocketAddr)> {
         self.0.accept()
-            .map(|(s, _)| s)
             .map_err(Self::map_interrupt_error)
     }
 
@@ -96,41 +54,21 @@ impl TcpListener {
     }
 }
 
-impl Listen<TcpInput, TcpOutput> for TcpListener {
-    fn listen(&mut self) -> io::Result<(TcpInput, TcpOutput)> {
-        let conn = try!(self.accept());
-        let input = try!(TcpInput::new(try!(conn.try_clone())));
-        let output = TcpOutput(conn);
-        Ok((input, output))
-    }
-}
-
-impl ShutdownInterruption for TcpListener {
+impl Listen for TcpListener {
+	type ConnAddr = net::SocketAddr;
+    type Input = net::TcpStream;
+    type Output = net::TcpStream;
     type Int = TcpInterruptor;
+
+    fn listen(&mut self) -> io::Result<(net::TcpStream, net::TcpStream, net::SocketAddr)> {
+        let (input, addr) = try!(self.accept());
+        let output = try!(input.try_clone());
+        try!(input.set_read_timeout(Some(Duration::from_millis(READ_TIMEOUT))));
+        Ok((input, output, addr))
+    }
 
     fn shutdown_interruption(&mut self) -> TcpInterruptor {
         TcpInterruptor::from_listener(&self.0)
-    }
-}
-
-
-pub struct TcpTransport {
-    listener: TcpListener
-}
-
-impl TcpTransport {
-    pub fn bind<A: net::ToSocketAddrs>(addr: A) -> io::Result<TcpTransport> {
-        Ok(TcpTransport { listener: try!(TcpListener::bind(addr)) })
-    }
-}
-
-impl Transport for TcpTransport {
-    type Input = TcpInput;
-    type Output = TcpOutput;
-    type Listener = TcpListener;
-
-    fn listener(&mut self) -> &mut TcpListener {
-        &mut self.listener
     }
 }
 
@@ -151,10 +89,6 @@ pub mod unix {
     impl TcpInterruptor {
         pub fn from_listener(listener: &net::TcpListener) -> TcpInterruptor {
             TcpInterruptor { fd: listener.as_raw_fd() }
-        }
-
-        pub fn from_stream(stream: &net::TcpStream) -> TcpInterruptor {
-            TcpInterruptor { fd: stream.as_raw_fd() }
         }
     }
 
@@ -185,10 +119,6 @@ pub mod win {
         pub fn from_listener(listener: &net::TcpListener) -> TcpInterruptor {
             TcpInterruptor { socket: listener.as_raw_socket() }
         }
-
-        pub fn from_stream(stream: &net::TcpStream) -> TcpInterruptor {
-            TcpInterruptor { socket: stream.as_raw_socket() }
-        }
     }
 
     impl Interrupt for TcpInterruptor {
@@ -209,7 +139,7 @@ pub use self::win::*;
 #[cfg(test)]
 mod tests {
     use std::io;
-    use std::io::{BufRead, Read, Write};
+    use std::io::{BufRead, Write};
     use std::net;
     use std::thread;
     use std::time;
@@ -222,7 +152,7 @@ mod tests {
     fn should_wait_conn() {
         let child = thread::spawn(|| {
             let mut listener = TcpListener::bind("127.0.0.1:1234").unwrap();
-            let (r, mut w) = listener.listen().unwrap();
+            let (r, mut w, _) = listener.listen().unwrap();
             let mut input = io::BufReader::new(r);
             let mut line = String::new();
             input.read_line(&mut line).unwrap();
@@ -249,29 +179,5 @@ mod tests {
         thread::sleep(time::Duration::from_millis(25));
         interruption.interrupt();
         child.join().unwrap();
-    }
-
-    #[test]
-    fn should_close_input_from_shutdown_handle() {
-        let mut listener = TcpListener::bind("127.0.0.1:1236").unwrap();
-        let interruption = listener.shutdown_interruption();
-        let client = thread::spawn(move || {
-            let _conn = net::TcpStream::connect("127.0.0.1:1236");
-            thread::sleep(time::Duration::from_millis(50));
-        });
-        let child = thread::spawn(move || {
-            let (mut conn, _) = listener.listen().unwrap();
-            let interruption = conn.shutdown_interruption();
-            thread::spawn(move || {
-                thread::sleep(time::Duration::from_millis(20));
-                interruption.interrupt();
-            });
-            let mut buf = [0; 10];
-            assert_eq!(conn.read(&mut buf).unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
-        });
-        thread::sleep(time::Duration::from_millis(50));
-        interruption.interrupt();
-        child.join().unwrap();
-        client.join().unwrap();
-    }
+    }    
 }

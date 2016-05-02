@@ -28,19 +28,19 @@
 //! problems identified above. The communication pattern problem is solved by ensuring the
 //! transport is able to split read and write endpoints for each new connection. Each one will be
 //! send to a different thread when transport is used. The termination pattern problem is solved
-//! by requiring listening and reading artifacts to provide a handle to interrupt the listen or
-//! read process. This handle may be used from another threads to indicate the listener or reader
-//! they must terminate.
+//! by requiring listeners to provide a handle to be interrupted. This handle may be used from 
+//! another thread to indicate the listener must terminate. Also readers, which are by nature
+//! blocking, are guaranteed to be configured with timeouts. If there is no incoming data after
+//! some duration, the read operation fails with `std::io::ErrorKind::TimedOut` error kind. 
 //!
 //! # Traits
 //!
 //! * `Interrupt`, which represents a handle to interrupt a process
-//! * `ShutdownInterruption`, which represents a object that provides a `Interrupt` instance for
-//!   shutting it down.
 //! * `Listen`, which represents a instance that can be used to listen for a pair of input and
-//!   output endpoints.
+//!   output endpoints. It provides the meanings to obtain an interruption handle. 
 //! * `Transport`, which represents a instance to bind everything else.
 
+use std::fmt;
 use std::io;
 
 pub mod tcp;
@@ -53,34 +53,17 @@ pub trait Interrupt {
     fn interrupt(self);
 }
 
-/// An object able to produce a `Interrupt` for shutting down.
-///
-/// See [the module level documentation](index.html) for more.
-pub trait ShutdownInterruption {
-    type Int: Interrupt;
-    fn shutdown_interruption(&mut self) -> Self::Int;
-}
-
 /// An object able to listen for incoming connections.
 ///
-/// It produces a pair of input and output endpoints ready to be used from different threads.
-/// See [the module level documentation](index.html) for more.
-pub trait Listen<I, O> {
-    fn listen(&mut self) -> io::Result<(I, O)>;
-}
+/// It produces a tuple of connection address, input and output endpoints ready to be used from 
+/// different threads. See [the module level documentation](index.html) for more.
+pub trait Listen {
+	type ConnAddr: fmt::Display;
+	type Input: io::Read;
+	type Output: io::Write;
+    type Int: Interrupt;
+	
+    fn listen(&mut self) -> io::Result<(Self::Input, Self::Output, Self::ConnAddr)>;
 
-/// An object able to univoquely identify itself.
-pub trait Identify {
-    fn id(&self) -> String;
-}
-
-/// An object able to bind the type information for all transport entities.
-///
-/// See [the module level documentation](index.html) for more.
-pub trait Transport {
-    type Input: ShutdownInterruption + Identify;
-    type Output;
-    type Listener: Listen<Self::Input, Self::Output> + ShutdownInterruption;
-
-    fn listener(&mut self) -> &mut Self::Listener;
+    fn shutdown_interruption(&mut self) -> Self::Int;
 }

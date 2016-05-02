@@ -41,20 +41,20 @@ pub type TcpPort = Port<comm::tcp::TcpInterruptor>;
 
 impl TcpPort {
     pub fn tcp<A, D, P>(name: String,
-                     addr: A,
-                     domain: D,
-                     proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
+                        addr: A,
+                        domain: D,
+                        proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs,
           D: Consume<Item=Command> + Clone + Send + 'static,
-          P: proto::Protocol<comm::tcp::TcpInput, comm::tcp::TcpOutput> + Send + 'static,
+          P: proto::Protocol<net::TcpStream, net::TcpStream> + Send + 'static,
           P::Read: Send + 'static,
           P::Write: Send + 'static {
         info!("Creating {}", name);
-        let mut transport = try!(comm::tcp::TcpTransport::bind(addr));
-        let interruption = transport.listener().shutdown_interruption();
+        let mut listener = try!(comm::tcp::TcpListener::bind(addr));
+        let interruption = listener.shutdown_interruption();
         Ok(Port {
             name: name,
-            worker: ListenWorker::new(spawn_listener(transport, domain, proto), interruption),
+            worker: ListenWorker::new(spawn_listener(listener, domain, proto), interruption),
         })
     }
 
