@@ -26,6 +26,7 @@ impl<I: comm::Interrupt> Worker<I> {
 		}
 	}
 	
+	#[cfg(test)]
 	pub fn interruption(&self) -> &I { &self.interruption }
 	
     pub fn shutdown(self) {
