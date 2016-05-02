@@ -18,6 +18,10 @@ use domain::*;
 use proto;
 use util::Consume;
 
+mod worker;
+
+use self::worker::*;
+
 #[allow(dead_code)]
 pub struct Port<I: comm::Interrupt> {
     name: String,
@@ -50,10 +54,7 @@ impl TcpPort {
         let interruption = transport.listener().shutdown_interruption();
         Ok(Port {
             name: name,
-            worker: Worker {
-                thread: spawn_listener(transport, domain, proto),
-                interruption: interruption
-            }
+            worker: Worker::new(spawn_listener(transport, domain, proto), interruption),
         })
     }
 
@@ -85,49 +86,13 @@ impl DummyPort {
         let protocol = proto::dummy();
         let port = Port {
             name: "dummy".to_string(),
-            worker: Worker {
-                thread: spawn_listener(transport, domain, protocol),
-                interruption: interruption
-            }
+            worker: Worker::new(spawn_listener(transport, domain, protocol), interruption),
         };
         port
     }
 
     pub fn new_connection(&self) -> (DummyPortInput, DummyPortOutput) {
-        self.worker.interruption.new_connection()
-    }
-}
-
-struct Worker<I> {
-    thread: thread::JoinHandle<()>,
-    interruption: I,
-}
-
-impl<I: comm::Interrupt> Worker<I> {
-    pub fn shutdown(self) {
-        self.interruption.interrupt();
-        self.thread.join().unwrap();
-    }
-}
-
-impl Worker<EventSender> {
-    pub fn shutdown(self) {
-        self.interruption.send(Event::Close).unwrap();
-        self.thread.join().unwrap();
-    }
-}
-
-struct Connection<I: comm::Interrupt> {
-    reader: Worker<I>,
-    writer: Worker<EventSender>
-}
-
-impl<I: comm::Interrupt> Connection<I> {
-    pub fn shutdown(self) {
-        info!("shutting down writer worker");
-        self.writer.shutdown();
-        info!("shutting down reader worker");
-        self.reader.shutdown();
+        self.worker.interruption().new_connection()
     }
 }
 
@@ -182,10 +147,9 @@ where I: comm::ShutdownInterruption + comm::Identify,
     let msg_writer = proto.writer(writer_stream);
     let reader = spawn_reader(msg_reader, domain, client_name);
     let writer = spawn_writer(msg_writer, reply_rx);
-    Connection {
-        reader: Worker { thread: reader, interruption: reader_interruption },
-        writer: Worker { thread: writer, interruption: writer_interruption }
-    }
+    Connection::new(
+    	Worker::new(reader, reader_interruption),
+        Worker::new(writer, writer_interruption))
 }
 
 fn spawn_reader<R, D>(
@@ -232,6 +196,7 @@ where W: proto::EventWrite + Send + 'static {
         }
     })
 }
+
 
 #[cfg(test)]
 mod tests {

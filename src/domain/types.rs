@@ -10,6 +10,7 @@ use std::fmt;
 use std::io;
 use std::sync::mpsc;
 
+use comm::Interrupt;
 use domain::fsuipc::Offset;
 
 pub type ClientName = String;
@@ -144,4 +145,11 @@ pub enum Event {
 }
 
 pub type EventSender = mpsc::Sender<Event>;
+
+impl Interrupt for EventSender {
+	fn interrupt(self) {
+		self.send(Event::Close).unwrap();
+	}
+}
+
 pub type EventReceiver = mpsc::Receiver<Event>;
