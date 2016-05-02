@@ -7,6 +7,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::io;
+use std::sync::Arc;
+use std::sync::atomic;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::thread;
 
@@ -52,42 +55,45 @@ where T: comm::Transport + Send + 'static,
     })
 }
 
-fn spawn_connection<I, O, D, P>(input: I, output: O, domain: D, proto: &P) -> Connection<I::Int>
-where I: comm::ShutdownInterruption + comm::Identify,
+fn spawn_connection<I, O, D, P>(input: I, output: O, domain: D, proto: &P) -> Connection
+where I: comm::Identify,
       D: Consume<Item=Command> + Send + 'static,
       P: proto::Protocol<I, O> + Send + 'static,
       P::Read: Send + 'static,
       P::Write: Send + 'static {
-    let (reply_tx, reply_rx) = mpsc::channel();
+    let reader_stop_signal = Arc::new(AtomicBool::new(false));
+    let (writer_tx, writer_rx) = mpsc::channel();
     let client_name = input.id().to_string();
-    let id = Client::new(&input.id(), reply_tx.clone());
-    let mut reader_stream = input;
-    let reader_interruption = reader_stream.shutdown_interruption();
-    let msg_reader = proto.reader(reader_stream, id);
-    let writer_stream = output;
-    let writer_interruption = reply_tx;
-    let msg_writer = proto.writer(writer_stream);
-    let reader = spawn_reader(msg_reader, domain, client_name);
-    let writer = spawn_writer(msg_writer, reply_rx);
+    let id = Client::new(&input.id(), writer_tx.clone());
+    let msg_reader = proto.reader(input, id);
+    let msg_writer = proto.writer(output);
+    let reader = spawn_reader(msg_reader, domain, client_name, reader_stop_signal.clone());
+    let writer = spawn_writer(msg_writer, writer_rx);
     Connection::new(
-    	Worker::new(reader, reader_interruption),
-        Worker::new(writer, writer_interruption))
+    	ReadWorker::new(reader, reader_stop_signal),
+        WriteWorker::new(writer, writer_tx))
 }
 
 fn spawn_reader<R, D>(
 	mut reader: R, 
 	mut domain: D, 
-	client_name: ClientName) -> thread::JoinHandle<()>
+	client_name: ClientName,
+    stop_signal: Arc<AtomicBool>) -> thread::JoinHandle<()>
 where R: proto::CommandRead + Send + 'static,
       D: Consume<Item=Command> + Send + 'static, {
     thread::spawn(move || {
         loop {
+        	if stop_signal.load(atomic::Ordering::Relaxed) {
+        		debug!("terminating due to stop signal detected");
+        		return; 
+        	}
             match reader.read_cmd() {
                 Ok(msg) => {
 		            if let Err(_) = domain.consume(msg) {
 		            	error!("unexpected error while consuming message");
 		            }
                 },
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => {},
                 Err(ref e) => {
                 	if e.kind() == io::ErrorKind::ConnectionAborted {
                     	debug!("connection reset: terminating reader worker thread");

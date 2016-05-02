@@ -6,43 +6,98 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::sync::Arc;
+use std::sync::atomic;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc;
 use std::thread;
 
 use comm;
 use comm::*;
 use domain::*;
 
-pub struct Worker<I: comm::Interrupt> {
-    thread: thread::JoinHandle<()>,
-    interruption: I,
+pub trait Worker {
+	fn shutdown(self);
 }
 
-impl<I: comm::Interrupt> Worker<I> {
-	
-	pub fn new(thread: thread::JoinHandle<()>, interruption: I) -> Worker<I> {
-		Worker {
+
+pub struct ListenWorker<I: comm::Interrupt> {
+    thread: thread::JoinHandle<()>,
+    interruptor: I,
+}
+
+impl<I: comm::Interrupt> ListenWorker<I> {
+	pub fn new(thread: thread::JoinHandle<()>, 
+			   interruptor: I) -> ListenWorker<I> {
+		ListenWorker {
 			thread: thread,
-			interruption: interruption,
+			interruptor: interruptor,
 		}
-	}
-	
-	#[cfg(test)]
-	pub fn interruption(&self) -> &I { &self.interruption }
-	
-    pub fn shutdown(self) {
-        self.interruption.interrupt();
+   }
+}
+
+impl<I: comm::Interrupt> Worker for ListenWorker<I> {		
+    fn shutdown(self) {
+        self.interruptor.interrupt();
         self.thread.join().unwrap();
     }
 }
 
-pub struct Connection<I: comm::Interrupt> {
-    reader: Worker<I>,
-    writer: Worker<EventSender>
+
+pub struct ReadWorker {
+    thread: thread::JoinHandle<()>,
+    signal: Arc<AtomicBool>,
 }
 
-impl<I: comm::Interrupt> Connection<I> {
+impl ReadWorker {
+	pub fn new(thread: thread::JoinHandle<()>, 
+			   signal: Arc<AtomicBool>) -> ReadWorker {
+		ReadWorker {
+			thread: thread,
+			signal: signal,
+		}
+	}	
+}
+
+impl Worker for ReadWorker {		
+    fn shutdown(self) {
+        self.signal.store(true, atomic::Ordering::Relaxed);
+        self.thread.join().unwrap();
+    }
+}
+
+
+pub struct WriteWorker {
+    thread: thread::JoinHandle<()>,
+    tx: mpsc::Sender<Event>,
+}
+
+impl WriteWorker {
+	pub fn new(thread: thread::JoinHandle<()>, 
+			   tx: mpsc::Sender<Event>) -> WriteWorker {
+		WriteWorker {
+			thread: thread,
+			tx: tx,
+		}
+	}	
+}
+
+impl Worker for WriteWorker {		
+    fn shutdown(self) {
+        self.tx.send(Event::Close).unwrap();
+        self.thread.join().unwrap();
+    }
+}
+
+
+pub struct Connection {
+    reader: ReadWorker,
+    writer: WriteWorker,
+}
+
+impl Connection {
 	
-	pub fn new(reader: Worker<I>, writer: Worker<EventSender>) -> Connection<I> {
+	pub fn new(reader: ReadWorker, writer: WriteWorker) -> Connection {
 		Connection {
 			reader: reader,
 			writer: writer,

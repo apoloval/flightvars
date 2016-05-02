@@ -124,14 +124,6 @@ impl Command {
             _ => None,
         }
     }
-
-	#[cfg(test)]
-    pub fn client(&self) -> Option<&Client> {
-        match self {
-            &Command::Observe(_, ref c) => Some(c),
-            _ => None,
-        }
-    }
 }
 
 pub type CommandSender = mpsc::Sender<Command>;

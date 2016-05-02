@@ -8,11 +8,21 @@
 
 use std::io;
 use std::net;
+use std::time::Duration;
 
 use comm::*;
 
+const READ_TIMEOUT: u64 = 250;
+
 #[derive(Debug)]
 pub struct TcpInput(net::TcpStream);
+
+impl TcpInput {
+	pub fn new(stream: net::TcpStream) -> io::Result<TcpInput> {
+		try!(stream.set_read_timeout(Some(Duration::from_millis(READ_TIMEOUT))));
+		Ok(TcpInput(stream))
+	}
+}
 
 #[cfg(unix)]
 impl io::Read for TcpInput {
@@ -89,7 +99,7 @@ impl TcpListener {
 impl Listen<TcpInput, TcpOutput> for TcpListener {
     fn listen(&mut self) -> io::Result<(TcpInput, TcpOutput)> {
         let conn = try!(self.accept());
-        let input = TcpInput(try!(conn.try_clone()));
+        let input = try!(TcpInput::new(try!(conn.try_clone())));
         let output = TcpOutput(conn);
         Ok((input, output))
     }
