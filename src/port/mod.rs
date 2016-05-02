@@ -16,11 +16,12 @@ use domain::*;
 use proto;
 use util::Consume;
 
-mod worker;
-mod spawn;
+mod conn;
+mod listen;
+mod read;
+mod write;
 
-use self::worker::*;
-use self::spawn::*;
+use self::listen::*;
 
 #[allow(dead_code)]
 pub struct Port<I: comm::Interrupt> {
@@ -54,7 +55,7 @@ impl TcpPort {
         let interruption = listener.shutdown_interruption();
         Ok(Port {
             name: name,
-            worker: ListenWorker::new(spawn_listener(listener, domain, proto), interruption),
+            worker: ListenWorker::new(listener, domain, proto, interruption),
         })
     }
 
