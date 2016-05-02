@@ -10,7 +10,7 @@ use std::io;
 
 use domain::{Event, Var};
 use proto::*;
-use proto::oacsp::msg::*;
+use proto::oacsp::output::*;
 use util::Consume;
 
 
@@ -51,7 +51,7 @@ mod tests {
     use domain::types::*;
     use domain::fsuipc::types::*;
     use proto::*;
-    use proto::oacsp::msg::*;    
+    use proto::oacsp::output::*;    
 
     use super::*;
 

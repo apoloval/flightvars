@@ -11,7 +11,7 @@ use std::io;
 use domain;
 use domain::{Client, Command};
 use proto::*;
-use proto::oacsp::msg::*;
+use proto::oacsp::input::*;
 
 
 pub struct CommandReader<I: Iterator<Item=io::Result<InputMessage>>> {
@@ -77,7 +77,7 @@ mod tests {
     use domain::types::*;
     use domain::fsuipc::types::*;
     use proto::*;
-    use proto::oacsp::msg::*;
+    use proto::oacsp::input::*;
 
     use super::*;
 

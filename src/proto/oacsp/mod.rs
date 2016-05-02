@@ -11,11 +11,13 @@ use std::io;
 use domain::Client;
 use proto::*;
 
-mod msg;
+mod input;
+mod output;
 mod reader;
 mod writer;
 
-use self::msg::*;
+use self::input::*;
+use self::output::*;
 pub use self::reader::*;
 pub use self::writer::*;
 
