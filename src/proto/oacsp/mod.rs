@@ -54,9 +54,11 @@ impl<I> CommandReader<I> where I: Iterator<Item=io::Result<InputMessage>> {
 
 impl<I: Iterator<Item=io::Result<InputMessage>>> CommandRead for CommandReader<I> {
     fn read_cmd(&mut self) -> io::Result<Command> {
-        let msg = try!(try!(self.input.next().ok_or_else(||
-            io::Error::new(io::ErrorKind::ConnectionReset,
-            "input stream was closed"))));
+    	let msg = try!(match self.input.next() {
+    		Some(result) => result,
+    		None => return Err(
+    			io::Error::new(io::ErrorKind::ConnectionReset, "input stream was closed")),
+    	});    	
         match msg {
             InputMessage::Begin { version, client_id } => {
                 info!("oacsp client v{} connected with ID {}", version, client_id);
