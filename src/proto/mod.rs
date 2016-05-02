@@ -29,8 +29,4 @@ pub trait Protocol<I, O> {
     fn writer(&self, output: O) -> Self::Write;
 }
 
-pub trait BidirProtocol<T> : Protocol<T, T> {}
-
-impl<T, P: Protocol<T, T>> BidirProtocol<T> for P {}
-
 pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }
