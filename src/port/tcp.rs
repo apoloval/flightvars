@@ -22,15 +22,13 @@ use port::listen::*;
 pub type TcpPort = Port<comm::tcp::TcpInterruptor>;
 
 impl TcpPort {
-    pub fn tcp<A, D, P>(name: String,
-                        addr: A,
-                        domain: D,
-                        proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
-    where A: net::ToSocketAddrs,
+    pub fn tcp<A, D, P>(addr: A, domain: D, proto: P) -> io::Result<Port<comm::tcp::TcpInterruptor>>
+    where A: net::ToSocketAddrs + fmt::Display,
           D: Consume<Item=Command> + Clone + Send + 'static,
           P: proto::Protocol<net::TcpStream, net::TcpStream> + Send + 'static,
           P::Read: Send + 'static,
           P::Write: Send + 'static {
+        let name = format!("tcp/{} port at address {}", proto.name(), addr);
         info!("Creating {}", name);
         let mut listener = try!(comm::tcp::TcpListener::bind(addr));
         let interruption = listener.shutdown_interruption();
@@ -44,7 +42,6 @@ impl TcpPort {
         io::Result<Port<comm::tcp::TcpInterruptor>>
     where A: net::ToSocketAddrs + fmt::Display,
           D: Consume<Item=Command> + Clone + Send + 'static {
-        let name = format!("oacsp/tcp port at address {}", addr);
-        Self::tcp(name, addr, domain, proto::oacsp())
+        Self::tcp(addr, domain, proto::oacsp())
     }
 }

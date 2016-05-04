@@ -25,6 +25,7 @@ pub trait EventWrite {
 pub trait Protocol<I, O> {
     type Read: CommandRead;
     type Write: EventWrite;
+    fn name(&self) -> &str;
     fn reader(&self, input: I, id: Client) -> Self::Read;
     fn writer(&self, output: O) -> Self::Write;
 }

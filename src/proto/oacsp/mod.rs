@@ -28,6 +28,8 @@ pub struct Oacsp;
 impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
     type Read = CommandReader<MessageIter<R>>;
     type Write = EventWriter<MessageConsumer<W>>;
+    
+    fn name(&self) -> &str { "oacsp" }
 
     fn reader(&self, input: R, id: Client) -> CommandReader<MessageIter<R>> {
         CommandReader::new(MessageIter::new(input), id)
