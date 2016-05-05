@@ -1,3 +1,5 @@
+[![Build Status](https://ci.appveyor.com/api/projects/status/ax5o4hx5esea120a?svg=true)](https://ci.appveyor.com/project/apoloval/flightvars)
+
 ## Introduction
 
 FlightVars is a Flight Simulator/Prepar3D plugin that exports the internal
