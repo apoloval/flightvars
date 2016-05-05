@@ -5,12 +5,8 @@ environment:
   matrix:
     - RUST_VERSION: stable
       VENDOR: gnu
-    - RUST_VERSION: stable
-      VENDOR: msvc
     - RUST_VERSION: beta
       VENDOR: gnu
-    - RUST_VERSION: beta
-      VENDOR: msvc
 
 install:
   - ps: |
