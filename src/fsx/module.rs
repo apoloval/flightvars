@@ -17,6 +17,7 @@ use port;
 
 struct Module {
     oacsp_tcp: Option<port::TcpPort>,
+    oacsp_serial: Option<port::SerialPort>,
 
     fsuipc: Option<domain::WorkerStub>,
     lvar: Option<domain::WorkerStub>,
@@ -25,7 +26,7 @@ struct Module {
 impl Module {
     pub fn new() -> Self {
         Module {
-            oacsp_tcp: None,
+            oacsp_tcp: None, oacsp_serial: None,
             lvar: None, fsuipc: None,
         }
     }
@@ -41,11 +42,13 @@ impl Module {
 
         self.fsuipc = Some(fsuipc);
         self.lvar = Some(lvar);
-        self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router).unwrap());
+        self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router.clone()).unwrap());
+        self.oacsp_serial = Some(port::SerialPort::with_oacsp(router).unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {
         info!("Stopping FlightVars module");
+        for port in self.oacsp_serial { port.shutdown(); }
         for port in self.oacsp_tcp { port.shutdown(); }
         for dom in self.fsuipc { dom.shutdown(); }
         for dom in self.lvar { dom.shutdown(); }

@@ -10,6 +10,7 @@ hex = "0.1"
 libc = "*"
 log = "0.3"
 log4rs = "0.3"
+serial = { git = "https://github.com/dcuddeback/serial-rs.git" }
 ws2_32-sys = "0.2"
 
 [lib]

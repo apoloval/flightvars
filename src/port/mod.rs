@@ -11,11 +11,13 @@ use comm;
 mod conn;
 mod listen;
 mod read;
+mod serial;
 mod tcp;
 mod write;
 
 use self::listen::*;
 
+pub use self::serial::*;
 pub use self::tcp::*;
 
 #[allow(dead_code)]

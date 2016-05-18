@@ -191,10 +191,10 @@ mod tests {
 
     #[test]
     fn should_parse_obs_offset_msg() {
-        let buf = "OBS_OFFSET 1234:UW";
+        let buf = "OBS_OFFSET 330:UW";
         let msg = InputMessage::from_str(&buf).unwrap();
         assert_eq!(msg, InputMessage::obs_offset(
-            Offset::new(OffsetAddr::from(0x1234), OffsetLen::UnsignedWord)));
+            Offset::new(OffsetAddr::from(0x0330), OffsetLen::UnsignedWord)));
     }
 
     #[test]

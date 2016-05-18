@@ -43,6 +43,7 @@
 use std::fmt;
 use std::io;
 
+pub mod serial;
 pub mod tcp;
 
 /// An object able to interrupt a communication process.
