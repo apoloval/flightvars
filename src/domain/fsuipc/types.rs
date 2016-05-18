@@ -10,7 +10,7 @@ use std::fmt;
 use std::io;
 use std::str;
 
-use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt};
 use hex::FromHex;
 
 use domain::types::Value;
@@ -35,15 +35,11 @@ impl fmt::Display for OffsetAddr {
 impl FromHex for OffsetAddr {
     type Error = io::Error;
     fn from_hex(s: &str) -> io::Result<OffsetAddr> {
-        let error = || io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("invalid FSUIPC offset address in '{}'", s));
-        let buf: Vec<u8> = try!(FromHex::from_hex(s).map_err(|_| error()));
-        if buf.len() > 2 { Err(error()) }
-        else {
-            (&buf[..]).read_u16::<BigEndian>()
-                .map(|v| OffsetAddr(v))
-                .map_err(|_| error())
+        match u16::from_str_radix(s, 16) {
+            Ok(n) => Ok(OffsetAddr(n)),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid FSUIPC offset address in '{}'", s))),
         }
     }
 }
