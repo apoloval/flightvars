@@ -12,7 +12,9 @@ extern crate hex;
 extern crate libc;
 #[macro_use] extern crate log;
 extern crate log4rs;
+extern crate rustc_serialize;
 extern crate serial;
+extern crate toml;
 extern crate ws2_32;
 
 mod domain;
