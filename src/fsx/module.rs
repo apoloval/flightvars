@@ -12,11 +12,12 @@ use std::ptr;
 use libc::malloc;
 
 use domain;
+use fsx::config;
 use fsx::logging;
 use port;
 
 static SERIAL_PORTS: [&'static str; 4] = ["COM3", "COM4", "COM5", "COM6"];
-
+const CONFIG_FILE: &'static str = "Modules/flightvars.conf";
 
 struct Module {
     oacsp_tcp: Option<port::TcpPort>,
@@ -35,7 +36,15 @@ impl Module {
     }
 
     pub fn start(&mut self) {
-        logging::config_logging();
+        let settings = config::Settings::from_toml_file(CONFIG_FILE)
+        	.ok()
+        	.unwrap_or_else(|| {
+    	        println!("FlightVars cannot load config file at {}", CONFIG_FILE);
+    	        println!("Falling back to default settings");
+    	        config::Settings::default()
+        	});
+    	logging::config_logging(&settings.logging);
+
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
         let fsuipc = domain::spawn_worker::<domain::fsuipc::Handler>();
         let lvar = domain::spawn_worker::<domain::lvar::Handler>();

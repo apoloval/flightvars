@@ -6,6 +6,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::fs;
+use std::io;
+use std::io::Read;
+use std::path::Path;
 use std::result;
 
 use log::LogLevelFilter;
@@ -20,16 +24,16 @@ pub enum Error {
 pub type Result<T> = result::Result<T, Error>;
 
 pub struct LoggingSettings {
-    log_level: LogLevelFilter,
+    pub level: LogLevelFilter,
 }
 
 impl Decodable for LoggingSettings {
     fn decode<D: Decoder>(d: &mut D) -> result::Result<Self, D::Error> {
         let mut result = LoggingSettings::default();
-        if let Ok(log_level_str) = d.read_struct_field("log_level", 0, |d| d.read_str()) {
-            result.log_level = try!(log_level_str
+        if let Ok(level_str) = d.read_struct_field("level", 0, |d| d.read_str()) {
+            result.level = try!(level_str
                 .parse()
-                .map_err(|_| d.error(&format!("unknown log level '{}'", log_level_str))));
+                .map_err(|_| d.error(&format!("unknown log level '{}'", level_str))));
         }
         Ok(result)
     }
@@ -38,17 +42,28 @@ impl Decodable for LoggingSettings {
 impl Default for LoggingSettings {
     fn default() -> LoggingSettings {
         LoggingSettings {
-            log_level: LogLevelFilter::Info,
+            level: LogLevelFilter::Info,
         }
     }
 }
 
 pub struct Settings {
-    logging: LoggingSettings,
+    pub logging: LoggingSettings,
 }
 
 impl Settings {
-    fn from_toml(toml: &str) -> Result<Settings> {
+    pub fn from_toml_file<P: AsRef<Path>>(path: P) -> io::Result<Settings> {
+        let mut file = try!(fs::File::open(&path));
+        let mut content = String::with_capacity(10*1024);
+        try!(file.read_to_string(&mut content));
+    	Self::from_toml(&content)
+			.map_err(|_| io::Error::new(
+		        io::ErrorKind::InvalidData, 
+		        format!("cannot read config from file '{:?}'", path.as_ref().as_os_str())))
+    }
+        
+    
+    pub fn from_toml(toml: &str) -> Result<Settings> {
         let mut table = try!(toml::Parser::new(toml).parse().ok_or(Error::CannotParse));
         let logging = if let Some(section) = table.remove("logging") {
 			try!(toml::decode(section).ok_or(Error::CannotDecode))            
@@ -77,7 +92,7 @@ mod tests {
 	#[test]
 	fn should_load_defaults_from_empty_toml() {
 	    let s = Settings::from_toml("").ok().unwrap();
-	    assert_eq!(s.logging.log_level, LogLevelFilter::Info);	    
+	    assert_eq!(s.logging.level, LogLevelFilter::Info);	    
 	}   
 
 	#[test]
@@ -85,25 +100,25 @@ mod tests {
 	    let s = Settings::from_toml(r#"
         	[logging]
         	"#).ok().unwrap();
-	    assert_eq!(s.logging.log_level, LogLevelFilter::Info);	    
+	    assert_eq!(s.logging.level, LogLevelFilter::Info);	    
 	}   
 
 	#[test]
-	fn should_load_logging_log_level() {
+	fn should_load_logging_level() {
 	    let s = Settings::from_toml(r#"
         	[logging]
-        	log_level = "DEBUG"
+        	level = "DEBUG"
         	"#).ok().unwrap();
-	    assert_eq!(s.logging.log_level, LogLevelFilter::Debug);
+	    assert_eq!(s.logging.level, LogLevelFilter::Debug);
 	    let s = Settings::from_toml(r#"
         	[logging]
-        	log_level = "warn"
+        	level = "warn"
         	"#).ok().unwrap();
-	    assert_eq!(s.logging.log_level, LogLevelFilter::Warn);	    
+	    assert_eq!(s.logging.level, LogLevelFilter::Warn);	    
 	    let s = Settings::from_toml(r#"
         	[logging]
-        	log_level = "Trace"
+        	level = "Trace"
         	"#).ok().unwrap();
-	    assert_eq!(s.logging.log_level, LogLevelFilter::Trace);
+	    assert_eq!(s.logging.level, LogLevelFilter::Trace);
 	}   
 }
