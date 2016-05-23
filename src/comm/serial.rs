@@ -36,12 +36,12 @@ pub struct PortScanner {
 }
 
 impl PortScanner {
-    pub fn new() -> io::Result<PortScanner> {
-        let mut ports = Vec::with_capacity(30);
-        for i in 3..4 {
-            let port_name = format!("COM{}", i);
+    pub fn with_ports<S, I>(port_names: I) -> io::Result<PortScanner> 
+    where S: Into<OsString>, I: IntoIterator<Item=S> {
+        let mut ports = Vec::with_capacity(64);
+        for port_name in port_names {
             let port_info = PortInfo {
-                name: SerialAddr(OsString::from(port_name)),
+                name: SerialAddr(port_name.into()),
                 status: PortStatus::Available,
             };
             ports.push(port_info);

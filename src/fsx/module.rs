@@ -15,6 +15,9 @@ use domain;
 use fsx::logging;
 use port;
 
+static SERIAL_PORTS: [&'static str; 4] = ["COM3", "COM4", "COM5", "COM6"];
+
+
 struct Module {
     oacsp_tcp: Option<port::TcpPort>,
     oacsp_serial: Option<port::SerialPort>,
@@ -43,7 +46,7 @@ impl Module {
         self.fsuipc = Some(fsuipc);
         self.lvar = Some(lvar);
         self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router.clone()).unwrap());
-        self.oacsp_serial = Some(port::SerialPort::with_oacsp(router).unwrap());
+        self.oacsp_serial = Some(port::SerialPort::with_oacsp(router, SERIAL_PORTS.iter()).unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {
