@@ -18,6 +18,8 @@ use serial::SerialPort;
 
 use comm::{Interrupt, Listen};
 
+const DEFAULT_BAUDRATE: serial::BaudRate = serial::BaudRate::Baud9600;
+
 
 #[derive(Debug, Eq, PartialEq)]
 enum PortStatus {
@@ -72,7 +74,7 @@ impl Listen for PortScanner {
                             info!("serial port {} successfully open", p.name);
                             
                             let mut settings = serial::PortSettings::default();
-                            settings.baud_rate = serial::BaudRate::Baud9600;
+                            settings.baud_rate = DEFAULT_BAUDRATE;
                             try!(open_port.configure(&settings));
                             try!(open_port.set_rts(true));
                             try!(open_port.set_dtr(true));
