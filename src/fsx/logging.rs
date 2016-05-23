@@ -20,7 +20,7 @@ pub fn config_logging(settings: LoggingSettings) {
 }
 
 fn log_config(settings: LoggingSettings) -> Config {
-    let log_path = Path::new("Modules/flightvars.log");
+    let log_path = Path::new(&settings.file);
     let file_appender = FileAppender::builder(log_path)
         .pattern(settings.pattern)
         .build()

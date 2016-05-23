@@ -19,6 +19,7 @@ use toml;
 
 const DEFAULT_LOGGING_LEVEL: LogLevelFilter = LogLevelFilter::Info;
 const DEFAULT_LOGGING_PATTERN: &'static str = "%d{%Y/%m/%d %H:%M:%S.%f} - [%l] [%M]: %m";
+const DEFAULT_LOGGING_FILE: &'static str = "Modules/flightvars.log";
 
 pub enum Error {
 	CannotParse,
@@ -30,6 +31,7 @@ pub type Result<T> = result::Result<T, Error>;
 pub struct LoggingSettings {
     pub level: LogLevelFilter,
     pub pattern: PatternLayout,
+    pub file: String,
 }
 
 impl Decodable for LoggingSettings {
@@ -44,6 +46,9 @@ impl Decodable for LoggingSettings {
             result.pattern = try!(PatternLayout::new(&pattern)
                 .map_err(|_| d.error(&format!("invalid log pattern in '{}'", pattern))));
         }
+        if let Ok(file) = d.read_struct_field("file", 0, |d| d.read_str()) {
+            result.file = file;
+        }
         Ok(result)
     }
 }
@@ -53,6 +58,7 @@ impl Default for LoggingSettings {
         LoggingSettings {
             level: DEFAULT_LOGGING_LEVEL,
             pattern: PatternLayout::new(DEFAULT_LOGGING_PATTERN).unwrap(),
+            file: DEFAULT_LOGGING_FILE.to_string(),
         }
     }
 }
@@ -141,5 +147,14 @@ mod tests {
 	    assert_eq!(
 	        format!("{:?}", s.logging.pattern), 
 	        r#"PatternLayout { pattern: [Text("the-pattern")] }"#);
-	}  
+	}
+	
+	#[test]
+	fn should_load_logging_file() {
+	    let s = Settings::from_toml(r#"
+        	[logging]
+        	file = "/path/to/log/file"
+        	"#).ok().unwrap();
+	    assert_eq!(s.logging.file, "/path/to/log/file");
+	} 
 }
