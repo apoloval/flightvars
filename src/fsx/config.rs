@@ -13,8 +13,12 @@ use std::path::Path;
 use std::result;
 
 use log::LogLevelFilter;
+use log4rs::pattern::PatternLayout;
 use rustc_serialize::*;
 use toml;
+
+const DEFAULT_LOGGING_LEVEL: LogLevelFilter = LogLevelFilter::Info;
+const DEFAULT_LOGGING_PATTERN: &'static str = "%d{%Y/%m/%d %H:%M:%S.%f} - [%l] [%M]: %m";
 
 pub enum Error {
 	CannotParse,
@@ -25,6 +29,7 @@ pub type Result<T> = result::Result<T, Error>;
 
 pub struct LoggingSettings {
     pub level: LogLevelFilter,
+    pub pattern: PatternLayout,
 }
 
 impl Decodable for LoggingSettings {
@@ -35,6 +40,10 @@ impl Decodable for LoggingSettings {
                 .parse()
                 .map_err(|_| d.error(&format!("unknown log level '{}'", level_str))));
         }
+        if let Ok(pattern) = d.read_struct_field("pattern", 0, |d| d.read_str()) {
+            result.pattern = try!(PatternLayout::new(&pattern)
+                .map_err(|_| d.error(&format!("invalid log pattern in '{}'", pattern))));
+        }
         Ok(result)
     }
 }
@@ -42,7 +51,8 @@ impl Decodable for LoggingSettings {
 impl Default for LoggingSettings {
     fn default() -> LoggingSettings {
         LoggingSettings {
-            level: LogLevelFilter::Info,
+            level: DEFAULT_LOGGING_LEVEL,
+            pattern: PatternLayout::new(DEFAULT_LOGGING_PATTERN).unwrap(),
         }
     }
 }
@@ -120,5 +130,16 @@ mod tests {
         	level = "Trace"
         	"#).ok().unwrap();
 	    assert_eq!(s.logging.level, LogLevelFilter::Trace);
-	}   
+	} 
+	
+	#[test]
+	fn should_load_logging_pattern() {
+	    let s = Settings::from_toml(r#"
+        	[logging]
+        	pattern = "the-pattern"
+        	"#).ok().unwrap();
+	    assert_eq!(
+	        format!("{:?}", s.logging.pattern), 
+	        r#"PatternLayout { pattern: [Text("the-pattern")] }"#);
+	}  
 }

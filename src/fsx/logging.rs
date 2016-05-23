@@ -12,19 +12,17 @@ use std::path::Path;
 use log4rs::init_config;
 use log4rs::appender::FileAppender;
 use log4rs::config::{Appender, Config, Root};
-use log4rs::pattern::PatternLayout;
 
 use fsx::config::LoggingSettings;
 
-pub fn config_logging(settings: &LoggingSettings) {
+pub fn config_logging(settings: LoggingSettings) {
     init_config(log_config(settings)).unwrap()
 }
 
-fn log_config(settings: &LoggingSettings) -> Config {
+fn log_config(settings: LoggingSettings) -> Config {
     let log_path = Path::new("Modules/flightvars.log");
-    let file_pattern = PatternLayout::new("%d{%Y/%m/%d %H:%M:%S.%f} - [%l] [%M]: %m").unwrap();
     let file_appender = FileAppender::builder(log_path)
-        .pattern(file_pattern)
+        .pattern(settings.pattern)
         .build()
         .unwrap();
     let main_appender = Appender::builder("main".to_string(), Box::new(file_appender))

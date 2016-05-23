@@ -43,7 +43,7 @@ impl Module {
     	        println!("Falling back to default settings");
     	        config::Settings::default()
         	});
-    	logging::config_logging(&settings.logging);
+    	logging::config_logging(settings.logging);
 
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
         let fsuipc = domain::spawn_worker::<domain::fsuipc::Handler>();
