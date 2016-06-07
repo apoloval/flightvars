@@ -7,9 +7,13 @@ install:
   - SET PATH=%PATH%;C:\Program Files (x86)\Rust stable GNU 1.8\bin
   - rustc -V
   - cargo -V
+  # Installing InnoSetup
+  - choco install --yes InnoSetup
+  - set PATH="C:\Program Files (x86)\Inno Setup 5";%PATH%
 
-build: false
+build_script:
+  - cargo build --verbose --release
+  - iscc installer/FlightVars.iss /DPWD=%CD%
 
 test_script:
-  - cargo build --verbose
   - cargo test --verbose
