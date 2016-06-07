@@ -6,6 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::io::Read;
@@ -63,8 +64,42 @@ impl Default for LoggingSettings {
     }
 }
 
+pub struct OacspSerialSettings {
+    pub ports: Vec<OsString>,
+}
+
+impl Decodable for OacspSerialSettings {
+    fn decode<D: Decoder>(d: &mut D) -> result::Result<Self, D::Error> {                        
+        let ports = try!(
+        	d.read_struct_field("ports", 0, |d| 
+	            d.read_option(|d, is_defined|
+            		if is_defined {
+                		d.read_seq(|d, len| {
+                        	let mut ports = Vec::with_capacity(len);
+                        	for i in 0..len {
+                        	    ports.push(OsString::from(try!(d.read_seq_elt(i, |d| d.read_str()))));
+                        	}
+                        	Ok(ports)
+                        })
+            		} else { Ok(Vec::new()) }            		
+        )));
+        Ok(OacspSerialSettings {
+            ports: ports,
+        })
+    }
+}
+
+impl Default for OacspSerialSettings {
+    fn default() -> OacspSerialSettings {
+        OacspSerialSettings {
+            ports: Vec::new(),
+        }
+    }
+}
+
 pub struct Settings {
     pub logging: LoggingSettings,
+    pub oacsp_serial: OacspSerialSettings,
 }
 
 impl Settings {
@@ -81,11 +116,17 @@ impl Settings {
     
     pub fn from_toml(toml: &str) -> Result<Settings> {
         let mut table = try!(toml::Parser::new(toml).parse().ok_or(Error::CannotParse));
-        let logging = if let Some(section) = table.remove("logging") {
-			try!(toml::decode(section).ok_or(Error::CannotDecode))            
-        } else { LoggingSettings::default() };
+        let logging =  match table.remove("logging") {
+			Some(section) => try!(toml::decode(section).ok_or(Error::CannotDecode)),
+			None => LoggingSettings::default(),            
+        };
+        let oacsp_serial = match table.remove("oacsp-serial") {
+            Some(section) => try!(toml::decode(section).ok_or(Error::CannotDecode)),
+            None => OacspSerialSettings::default(),
+        };
         Ok(Settings {
-			logging: logging                
+			logging: logging,
+			oacsp_serial: oacsp_serial,                
         })
     }
 }
@@ -94,13 +135,17 @@ impl Default for Settings {
     fn default() -> Settings {
         Settings {
             logging: LoggingSettings::default(),
+            oacsp_serial: OacspSerialSettings::default(),
         }
     }
 }
 
+
 #[cfg(test)]
 mod tests {
 
+	use std::ffi::OsString;
+	
 	use log::LogLevelFilter;
 
 	use super::*;
@@ -156,5 +201,22 @@ mod tests {
         	file = "/path/to/log/file"
         	"#).ok().unwrap();
 	    assert_eq!(s.logging.file, "/path/to/log/file");
+	} 
+	
+	#[test]
+	fn should_load_oacsp_serial_ports() {
+	    let s = Settings::from_toml(r#"
+        	[oacsp-serial]
+        	ports = ["COM1", "COM2"]
+        	"#).ok().unwrap();
+	    assert_eq!(&s.oacsp_serial.ports, &[OsString::from("COM1"), OsString::from("COM2")]);
+	} 
+	
+	#[test]
+	fn should_fail_load_oacsp_serial_invalid_ports() {
+	    assert!(Settings::from_toml(r#"
+        	[oacsp-serial]
+        	ports = "This is not a valid port description"
+        	"#).is_err());
 	} 
 }

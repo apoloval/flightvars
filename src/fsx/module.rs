@@ -16,7 +16,6 @@ use fsx::config;
 use fsx::logging;
 use port;
 
-static SERIAL_PORTS: [&'static str; 4] = ["COM3", "COM4", "COM5", "COM6"];
 const CONFIG_FILE: &'static str = "Modules/flightvars.conf";
 
 struct Module {
@@ -55,7 +54,8 @@ impl Module {
         self.fsuipc = Some(fsuipc);
         self.lvar = Some(lvar);
         self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router.clone()).unwrap());
-        self.oacsp_serial = Some(port::SerialPort::with_oacsp(router, SERIAL_PORTS.iter()).unwrap());
+        self.oacsp_serial = Some(port::SerialPort::with_oacsp(
+                router, settings.oacsp_serial.ports).unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {
