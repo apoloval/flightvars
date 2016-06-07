@@ -1,5 +1,4 @@
 #define AppName "FlightVars"
-#define AppVersion "0.1.0"
 
 [setup]
 AppCopyright=Copyright (C) 2015-2016 Alvaro Polo

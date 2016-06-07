@@ -1,3 +1,5 @@
+version: '0.1RC0-b{build}'
+
 platform:
   - x86
 
@@ -11,9 +13,23 @@ install:
   - choco install --yes InnoSetup
   - set PATH="C:\Program Files (x86)\Inno Setup 5";%PATH%
 
-build_script:
-  - cargo build --verbose --release
-  - iscc installer/FlightVars.iss /DPWD=%CD%
-
 test_script:
   - cargo test --verbose
+
+build_script:
+  - cargo build --verbose --release
+  - iscc installer/FlightVars.iss /DPWD=%CD% /DAppVersion=%APPVEYOR_BUILD_VERSION%
+
+artifacts:
+  - path: installer/*.exe
+deploy:
+  release: flightvars-v$(appveyor_build_version)
+  description: 'FlightVars plugin for FSX/P3D'
+  provider: GitHub
+  auth_token:
+    secure: 4QP9Hc3xgTn+8pJQTfK7Ooq4quBsecJX84qgBqnta3EnbeNTiEDCrDCJ2KNHn1vZ
+  draft: false
+  prerelease: true
+  on:
+    branch: master                 # release from master branch only
+    appveyor_repo_tag: true        # deploy on tag push only
