@@ -1,36 +1,35 @@
+version: '0.1RC0-b{build}'
+
 platform:
   - x86
 
-environment:
-  matrix:
-    - RUST_VERSION: stable
-      VENDOR: gnu
-    - RUST_VERSION: beta
-      VENDOR: gnu
-
 install:
-  - ps: |
-      if ($env:PLATFORM -eq "x86") {
-          $arch = "i686"
-      }
-      else {
-          $arch = "x86_64"
-      }
-      if ($env:RUST_VERSION -eq "stable") {
-        Start-FileDownload "https://static.rust-lang.org/dist/channel-rust-stable" -FileName "channel-rust-stable"
-        $installer = Get-Content "channel-rust-stable" | Select-String -Pattern "$arch-pc-windows-${env:VENDOR}.exe"
-      }
-      else {
-        $installer = "rust-${env:RUST_VERSION}-$arch-pc-windows-${env:VENDOR}.exe"
-      }
-      Start-FileDownload "https://static.rust-lang.org/dist/$installer" -FileName rust-install.exe
-  - rust-install.exe /VERYSILENT /NORESTART /DIR="C:\Program Files (x86)\Rust"
-  - SET PATH=%PATH%;C:\Program Files (x86)\Rust\bin
+  # Installing Rust distribution
+  - choco install --yes --x86 --version=1.8 rust
+  - SET PATH=%PATH%;C:\Program Files (x86)\Rust stable GNU 1.8\bin
   - rustc -V
   - cargo -V
-
-build: false
+  # Installing InnoSetup
+  - choco install --yes InnoSetup
+  - set PATH="C:\Program Files (x86)\Inno Setup 5";%PATH%
 
 test_script:
-  - cargo build --verbose
   - cargo test --verbose
+
+build_script:
+  - cargo build --verbose --release
+  - iscc installer/FlightVars.iss /DPWD=%CD% /DAppVersion=%APPVEYOR_BUILD_VERSION%
+
+artifacts:
+  - path: installer/*.exe
+deploy:
+  release: flightvars-v$(appveyor_build_version)
+  description: 'FlightVars plugin for FSX/P3D'
+  provider: GitHub
+  auth_token:
+    secure: 4QP9Hc3xgTn+8pJQTfK7Ooq4quBsecJX84qgBqnta3EnbeNTiEDCrDCJ2KNHn1vZ
+  draft: false
+  prerelease: true
+  on:
+    branch: master                 # release from master branch only
+    appveyor_repo_tag: true        # deploy on tag push only
