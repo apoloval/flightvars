@@ -1,4 +1,4 @@
-version: '0.1RC0-b{build}'
+version: '0.1.0-RC0-b{build}'
 
 platform:
   - x86
@@ -23,7 +23,6 @@ build_script:
 artifacts:
   - path: installer/*.exe
 deploy:
-  release: flightvars-v$(appveyor_build_version)
   description: 'FlightVars plugin for FSX/P3D'
   provider: GitHub
   auth_token:
