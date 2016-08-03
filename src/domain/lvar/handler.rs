@@ -89,7 +89,9 @@ impl Observer {
         let must_trigger = self.retain.as_ref().map(|v| *v != val).unwrap_or(true);
         if must_trigger {
             let var = Var::LVar(self.lvar.clone());
-            if let Err(e) = self.client.sender().send(Event::Update(var, val)) {
+            let event = Event::Update(var, val);
+            debug!("triggering event {:?} to client {}", event, self.client.name());
+            if let Err(e) = self.client.sender().send(event) {
                 error!("unexpected error while sending event to client {}: {}",
                     self.client.name(), e);
             }
