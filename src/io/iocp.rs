@@ -79,6 +79,7 @@ impl<C> CompletionPort<C> {
         let dev = &mut dev_info.0;
         let handler = &mut dev_info.1;
         dev.read_buffer.extend(nbytes as usize);
+        dev.read_pending = false;
         handler.process_read(context, dev);
         Ok(())
     }
@@ -88,6 +89,7 @@ pub struct Device {
     handle: HANDLE,
     read_overlapped: OVERLAPPED,
     read_buffer: Buffer,
+    read_pending: bool,
 }
 
 impl Device {
@@ -119,6 +121,7 @@ impl Device {
           handle: handle,
           read_overlapped: OVERLAPPED::new(),
           read_buffer: Buffer::with_capacity(4096),
+          read_pending: false,
       }  
     }
     
@@ -126,15 +129,21 @@ impl Device {
         self.read_buffer.as_slice()
     }
     
-    pub fn request_read(&mut self) {
-        unsafe {
+    pub fn request_read(&mut self) -> io::Result<()>{
+        assert!(!self.read_pending);
+        let rc = unsafe {
             ReadFile(
                 self.handle,
                 self.read_buffer.as_mut_ptr() as LPVOID,
                 self.read_buffer.remaining() as DWORD,
                 0 as LPDWORD,
-                &mut self.read_overlapped as LPOVERLAPPED);
+                &mut self.read_overlapped as LPOVERLAPPED)
+        };
+        if rc == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
+            return Err(io::Error::last_os_error());
         }
+        self.read_pending = true;
+        Ok(())
     }
 }
 
@@ -161,7 +170,7 @@ mod test {
 		    {
 		        let file = Device::open(path).unwrap();
 		        let dev = iocp.attach(file, MockDeviceHandler).unwrap();
-    		    dev.request_read();
+    		    dev.request_read().expect("request read");
 		    }
 		    iocp.process_event(&mut context).unwrap();
 		    assert_eq!(context, "This is a file with some content"); 

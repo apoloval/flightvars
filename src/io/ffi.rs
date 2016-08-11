@@ -34,6 +34,7 @@ pub type LPHANDLE = *mut HANDLE;
 pub const INVALID_HANDLE_VALUE: HANDLE = !0 as HANDLE;
 
 pub const INFINITE: DWORD = !0 as DWORD;
+pub const ERROR_IO_PENDING: DWORD = 997;
 
 pub const GENERIC_READ: DWORD 	 	= 0x80000000;
 pub const GENERIC_WRITE: DWORD   	= 0x40000000;
@@ -109,6 +110,8 @@ extern "system" {
       	ExistingCompletionPort: HANDLE,
       	CompletionKey: ULONG_PTR,
       	NumberOfConcurrentThreads: DWORD) -> HANDLE;
+    
+    pub fn GetLastError() -> DWORD;
     
     pub fn GetQueuedCompletionStatus(
 		CompletionPort: HANDLE,
