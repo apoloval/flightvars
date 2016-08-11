@@ -18,7 +18,7 @@ use super::ffi::*;
 pub struct CompletionPort<C> {
     handle: HANDLE,
     next_key: ULONG_PTR,
-    devices: HashMap<ULONG_PTR, (Device, Box<DeviceHandler<C>>)>,
+    devices: HashMap<ULONG_PTR, (Device, Box<DeviceHandler<Context=C>>)>,
 }
 
 impl<C> CompletionPort<C> {
@@ -41,7 +41,7 @@ impl<C> CompletionPort<C> {
     }
         
     pub fn attach<H>(&mut self, dev: Device, handler: H) -> io::Result<&mut Device> 
-    where H: DeviceHandler<C> + 'static {
+    where H: DeviceHandler<Context=C> + 'static {
         let handle = dev.handle;
         let key = self.next_key;
         self.next_key = (self.next_key as DWORD + 1) as ULONG_PTR;
@@ -147,8 +147,9 @@ impl Device {
     }
 }
 
-pub trait DeviceHandler<C> {
-    fn process_read(&mut self, context: &mut C, dev: &mut Device);
+pub trait DeviceHandler {
+    type Context;
+    fn process_read(&mut self, context: &mut Self::Context, dev: &mut Device);
 }
 
 #[cfg(test)]
@@ -189,7 +190,8 @@ mod test {
 	
 	struct MockDeviceHandler;
 	
-	impl DeviceHandler<String> for MockDeviceHandler {
+	impl DeviceHandler for MockDeviceHandler {
+	    type Context = String;
 	    fn process_read(&mut self, context: &mut String, dev: &mut Device) {
 	    	*context = String::from_utf8(dev.read_buffer().to_vec()).unwrap();
 	    }
