@@ -12,6 +12,7 @@ use std::io;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
+use super::buffer::Buffer;
 use super::ffi::*;
 
 pub struct CompletionPort<C> {
@@ -77,10 +78,7 @@ impl<C> CompletionPort<C> {
         let dev_info = self.devices.get_mut(&key).unwrap();
         let dev = &mut dev_info.0;
         let handler = &mut dev_info.1;
-        let new_len = dev.read_buffer.len() as DWORD + nbytes;
-        unsafe {
-            dev.read_buffer.set_len(new_len as usize);
-        }
+        dev.read_buffer.extend(nbytes as usize);
         handler.process_read(context, dev);
         Ok(())
     }
@@ -89,7 +87,7 @@ impl<C> CompletionPort<C> {
 pub struct Device {
     handle: HANDLE,
     read_overlapped: OVERLAPPED,
-    read_buffer: Vec<u8>,
+    read_buffer: Buffer,
 }
 
 impl Device {
@@ -120,21 +118,20 @@ impl Device {
       Device {
           handle: handle,
           read_overlapped: OVERLAPPED::new(),
-          read_buffer: Vec::with_capacity(4096),
+          read_buffer: Buffer::with_capacity(4096),
       }  
     }
     
     pub fn read_buffer(&self) -> &[u8] {
-        &self.read_buffer
+        self.read_buffer.as_slice()
     }
     
     pub fn request_read(&mut self) {
-        let remaining_bytes = self.read_buffer.capacity() - self.read_buffer.len();
         unsafe {
             ReadFile(
                 self.handle,
-                self.read_buffer.as_ptr() as LPVOID,
-                remaining_bytes as DWORD,
+                self.read_buffer.as_mut_ptr() as LPVOID,
+                self.read_buffer.remaining() as DWORD,
                 0 as LPDWORD,
                 &mut self.read_overlapped as LPOVERLAPPED);
         }
