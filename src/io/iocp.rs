@@ -6,23 +6,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::boxed::Box;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io;
-use std::os::windows::ffi::OsStrExt;
-use std::path::Path;
 
-use super::buffer::Buffer;
+use super::device::*;
 use super::ffi::*;
 
-pub struct CompletionPort<C> {
+pub struct CompletionPort {
     handle: HANDLE,
     next_key: ULONG_PTR,
-    devices: HashMap<ULONG_PTR, (Device, Box<DeviceHandler<Context=C>>)>,
+    devices: HashSet<DeviceId>,
 }
 
-impl<C> CompletionPort<C> {
-    pub fn new() -> io::Result<CompletionPort<C>> {
+impl CompletionPort {
+    pub fn new() -> io::Result<CompletionPort> {
         let handle = unsafe {
             CreateIoCompletionPort(
                 INVALID_HANDLE_VALUE,
@@ -36,17 +33,16 @@ impl<C> CompletionPort<C> {
         Ok(CompletionPort {
             handle: handle,
             next_key: 1 as ULONG_PTR,
-            devices: HashMap::new(),
+            devices: HashSet::new(),
         })
     }
         
-    pub fn attach<H>(&mut self, dev: Device, handler: H) -> io::Result<&mut Device> 
-    where H: DeviceHandler<Context=C> + 'static {
-        let handle = dev.handle;
-        let key = self.next_key;
+    pub fn attach(&mut self, dev: &Device) -> io::Result<()> {
+        let handle = dev.handle();
+        let id = dev.id();
+        let key = id.as_raw();
         self.next_key = (self.next_key as DWORD + 1) as ULONG_PTR;
-        self.devices.insert(key, (dev, Box::new(handler)));
-        let dev_ref = &mut self.devices.get_mut(&key).unwrap().0;
+        self.devices.insert(id);
         unsafe {            
             let rc = CreateIoCompletionPort(
                 handle,
@@ -57,10 +53,10 @@ impl<C> CompletionPort<C> {
                 return Err(io::Error::last_os_error());
             }
         }
-        Ok(dev_ref)
+        Ok(())
     }
     
-    pub fn process_event(&mut self, context: &mut C) -> io::Result<()> {
+    pub fn process_event(&mut self) -> io::Result<DeviceId> {
         let mut nbytes: DWORD = 0;
         let mut key: ULONG_PTR = 0 as ULONG_PTR;
         let mut overlapped: LPOVERLAPPED = 0 as LPOVERLAPPED;
@@ -75,81 +71,8 @@ impl<C> CompletionPort<C> {
                 return Err(io::Error::last_os_error());
             }
         };
-        let dev_info = self.devices.get_mut(&key).unwrap();
-        let dev = &mut dev_info.0;
-        let handler = &mut dev_info.1;
-        dev.read_buffer.extend(nbytes as usize);
-        dev.read_pending = false;
-        handler.process_read(context, dev);
-        Ok(())
+        Ok(DeviceId::from_raw(key))
     }
-}
-
-pub struct Device {
-    handle: HANDLE,
-    read_overlapped: OVERLAPPED,
-    read_buffer: Buffer,
-    read_pending: bool,
-}
-
-impl Device {
-    
-    pub fn open(path: &Path) -> io::Result<Device> {
-        let encoded_path: Vec<u16> = path
-        	.as_os_str()
-        	.encode_wide()
-        	.chain(Some(0).into_iter())
-        	.collect();
-        let handle = unsafe {
-            CreateFileW(
-                encoded_path.as_ptr() as LPCWSTR,
-          		GENERIC_ALL,
-          		0,
-          		0 as LPSECURITY_ATTRIBUTES,
-           		OPEN_EXISTING,
-          		FILE_FLAG_OVERLAPPED,
-          		0 as HANDLE)
-        };
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(Device::from_handle(handle))
-    }
-    
-    pub fn from_handle(handle: HANDLE) -> Device {
-      Device {
-          handle: handle,
-          read_overlapped: OVERLAPPED::new(),
-          read_buffer: Buffer::with_capacity(4096),
-          read_pending: false,
-      }  
-    }
-    
-    pub fn read_buffer(&self) -> &[u8] {
-        self.read_buffer.as_slice()
-    }
-    
-    pub fn request_read(&mut self) -> io::Result<()>{
-        assert!(!self.read_pending);
-        let rc = unsafe {
-            ReadFile(
-                self.handle,
-                self.read_buffer.as_mut_ptr() as LPVOID,
-                self.read_buffer.remaining() as DWORD,
-                0 as LPDWORD,
-                &mut self.read_overlapped as LPOVERLAPPED)
-        };
-        if rc == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
-            return Err(io::Error::last_os_error());
-        }
-        self.read_pending = true;
-        Ok(())
-    }
-}
-
-pub trait DeviceHandler {
-    type Context;
-    fn process_read(&mut self, context: &mut Self::Context, dev: &mut Device);
 }
 
 #[cfg(test)]
@@ -161,20 +84,22 @@ mod test {
 
     use tempdir::TempDir;
 
+	use io::device::*;
+
     use super::*;
 	
 	#[test]
 	fn should_read_device() {
 	    with_file_content("foobar", "This is a file with some content", |path| {
-            let mut context = "context: ".to_string();
 		    let mut iocp = CompletionPort::new().unwrap();
-		    {
-		        let file = Device::open(path).unwrap();
-		        let dev = iocp.attach(file, MockDeviceHandler).unwrap();
-    		    dev.request_read().expect("request read");
-		    }
-		    iocp.process_event(&mut context).unwrap();
-		    assert_eq!(context, "This is a file with some content"); 
+	        let mut file = Device::open(path).unwrap();
+	        iocp.attach(&file).unwrap();
+		    file.request_read().expect("request read");
+		    let dev = iocp.process_event().unwrap();
+		    assert_eq!(dev, file.id());
+		    let event = file.process_event();
+		    assert_eq!(event, Event::BytesRead(32));
+		    assert_eq!(file.recv_bytes(), b"This is a file with some content"); 
         });
 	}
 	
@@ -186,14 +111,5 @@ mod test {
 	    	write!(file, "{}", content).unwrap();
 	    }
 	    f(&file_path);
-	}
-	
-	struct MockDeviceHandler;
-	
-	impl DeviceHandler for MockDeviceHandler {
-	    type Context = String;
-	    fn process_read(&mut self, context: &mut String, dev: &mut Device) {
-	    	*context = String::from_utf8(dev.read_buffer().to_vec()).unwrap();
-	    }
 	}
 }

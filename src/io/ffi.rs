@@ -36,6 +36,12 @@ pub const INVALID_HANDLE_VALUE: HANDLE = !0 as HANDLE;
 pub const INFINITE: DWORD = !0 as DWORD;
 pub const ERROR_IO_PENDING: DWORD = 997;
 
+pub const STATUS_WAIT_0: ULONG_PTR 			 	= 0 as ULONG_PTR;
+pub const STATUS_ABANDONED_WAIT_0: ULONG_PTR 	= 128 as ULONG_PTR;
+pub const STATUS_USER_APC: ULONG_PTR			= 192 as ULONG_PTR;
+pub const STATUS_TIMEOUT: ULONG_PTR 			= 258 as ULONG_PTR;
+pub const STATUS_PENDING: ULONG_PTR 			= 259 as ULONG_PTR;
+
 pub const GENERIC_READ: DWORD 	 	= 0x80000000;
 pub const GENERIC_WRITE: DWORD   	= 0x40000000;
 pub const GENERIC_EXECUTE: DWORD 	= 0x20000000;
@@ -74,8 +80,8 @@ pub type LPSECURITY_ATTRIBUTES = *mut SECURITY_ATTRIBUTES;
 
 #[repr(C)]
 pub struct OVERLAPPED {
-    pub Internal: *mut c_ulong,
-    pub InternalHigh: *mut c_ulong,
+    pub Internal: ULONG_PTR ,
+    pub InternalHigh: ULONG_PTR ,
     pub Offset: DWORD,
     pub OffsetHigh: DWORD,
     pub hEvent: HANDLE,
@@ -84,8 +90,8 @@ pub struct OVERLAPPED {
 impl OVERLAPPED {
     pub fn new() -> OVERLAPPED {
         OVERLAPPED {
-            Internal: 0 as *mut c_ulong,
-            InternalHigh: 0 as *mut c_ulong,
+            Internal: 0 as ULONG_PTR ,
+            InternalHigh: 0 as ULONG_PTR ,
             Offset: 0, 
             OffsetHigh: 0, 
             hEvent: 0 as HANDLE,
