@@ -8,6 +8,7 @@
 
 use std::collections::HashSet;
 use std::io;
+use std::time::Duration;
 
 use super::device::*;
 use super::ffi::*;
@@ -53,17 +54,20 @@ impl CompletionPort {
         Ok(())
     }
     
-    pub fn process_event(&mut self) -> io::Result<DeviceId> {
+    pub fn process_event(&mut self, timeout: &Duration) -> io::Result<DeviceId> {
         let mut nbytes: DWORD = 0;
         let mut key: ULONG_PTR = 0 as ULONG_PTR;
         let mut overlapped: LPOVERLAPPED = 0 as LPOVERLAPPED;
+        let timeout_millis = 
+        	(timeout.as_secs() as DWORD * 1000) + 
+        	(timeout.subsec_nanos() as DWORD / 1000000);
         unsafe {
             let rc = GetQueuedCompletionStatus(
         		self.handle,
              	&mut nbytes as LPDWORD,
              	&mut key as PULONG_PTR,
              	&mut overlapped as *mut LPOVERLAPPED,
-          	 	100);
+          	 	timeout_millis);
             if rc == 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -78,6 +82,7 @@ mod test {
     use std::fs::File;
 	use std::io::{Read, Write};
 	use std::path::Path;
+	use std::time::Duration;
 
     use tempdir::TempDir;
 
@@ -92,7 +97,7 @@ mod test {
 	        let mut file = Device::open(path).unwrap();
 	        iocp.attach(&file).unwrap();
 		    file.request_read().expect("request read");
-		    let dev = iocp.process_event().unwrap();
+		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
 		    assert_eq!(dev, file.id());
 		    let event = file.process_event();
 		    assert_eq!(event, Event::BytesRead(32));
@@ -107,7 +112,7 @@ mod test {
 	        let mut file = Device::open(path).unwrap();
 	        iocp.attach(&file).unwrap();
 		    file.request_write(b"This is a file with some content").expect("request write");
-		    let dev = iocp.process_event().unwrap();
+		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
 		    assert_eq!(dev, file.id());
 		    let event = file.process_event();
 		    assert_eq!(event, Event::BytesWritten(32));
@@ -124,11 +129,11 @@ mod test {
 	        iocp.attach(&file).unwrap();
 		    file.request_write(b"This is a file with some content").expect("request write");
 		    file.request_write(b"This is Sparta").expect("request write");
-		    let dev = iocp.process_event().unwrap();
+		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
 		    assert_eq!(dev, file.id());
 		    let event = file.process_event();
 		    assert_eq!(event, Event::BytesWritten(32));
-		    let dev = iocp.process_event().unwrap();
+		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
 		    assert_eq!(dev, file.id());
 		    let event = file.process_event();
 		    assert_eq!(event, Event::BytesWritten(14));

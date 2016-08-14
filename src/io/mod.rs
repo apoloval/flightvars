@@ -12,3 +12,4 @@ mod ffi;
 mod buffer;
 mod device;
 mod iocp;
+mod serial;

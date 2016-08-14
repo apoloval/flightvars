@@ -111,10 +111,11 @@ impl Device {
     
     pub fn request_read(&mut self) -> io::Result<()>{
         assert!(!self.read_pending);
+        let offset = self.read_control_block.buffer.len() as isize;
         let rc = unsafe {
             ReadFile(
                 self.handle,
-                self.read_control_block.buffer.as_mut_ptr() as LPVOID,
+                self.read_control_block.buffer.as_mut_ptr().offset(offset) as LPVOID,
                 self.read_control_block.buffer.remaining() as DWORD,
                 0 as LPDWORD,
                 &mut self.read_control_block.overlapped as LPOVERLAPPED)
