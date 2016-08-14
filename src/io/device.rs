@@ -8,6 +8,7 @@
 
 use std::hash::{Hash, Hasher};
 use std::io;
+use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
@@ -35,6 +36,7 @@ impl Hash for DeviceId {
 pub enum Event {
     None,
     BytesRead(usize),
+    BytesWritten(usize),
 }
 
 pub struct Device {
@@ -42,6 +44,9 @@ pub struct Device {
     read_overlapped: OVERLAPPED,
     read_buffer: Buffer,
     read_pending: bool,
+    write_overlapped: OVERLAPPED,
+    write_buffer: Buffer,
+    write_pending: bool,
 }
 
 impl Device {
@@ -80,7 +85,18 @@ impl Device {
           read_overlapped: OVERLAPPED::new(),
           read_buffer: Buffer::with_capacity(4096),
           read_pending: false,
+          write_overlapped: OVERLAPPED::new(),
+          write_buffer: Buffer::with_capacity(4096),
+          write_pending: false,
       }  
+    }
+    
+    pub fn close(self) -> io::Result<()> {
+        let rc = unsafe { 
+            CloseHandle(self.handle) 
+        };
+        if rc == 0 { Err(io::Error::last_os_error()) } 
+        else { Ok(()) }
     }
     
     pub fn recv_bytes(&self) -> &[u8] {
@@ -104,18 +120,55 @@ impl Device {
         Ok(())
     }
     
-    pub fn process_event(&mut self) -> Event {
-        self.process_read_event()
+    pub fn request_write(&mut self, data: &[u8]) -> io::Result<()> {
+        try!(self.write_buffer.write(data));
+        assert!(!self.write_pending);
+        let rc = unsafe {
+            WriteFile(
+                self.handle,
+                self.write_buffer.as_ptr() as LPCVOID,
+                self.write_buffer.len() as DWORD,
+                0 as LPDWORD,
+                &mut self.write_overlapped as LPOVERLAPPED)
+        };
+        if rc == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
+            return Err(io::Error::last_os_error());
+        }
+        self.write_pending = true;
+        Ok(())
     }
     
-    pub fn process_read_event(&mut self) -> Event {
-        if self.read_pending && self.read_overlapped.Internal != STATUS_PENDING {
-            let nbytes = self.read_overlapped.InternalHigh as usize;
-            self.read_buffer.extend(nbytes);
-            self.read_pending = false;
-            Event::BytesRead(nbytes)
+    pub fn process_event(&mut self) -> Event {
+        if self.read_event_ready() {
+        	Event::BytesRead(self.process_read_event())
+        } else if self.write_event_ready() {
+            Event::BytesWritten(self.process_write_event())
         } else {
             Event::None
         }
+    }
+    
+    fn read_event_ready(&self) -> bool  {
+        self.read_pending && self.read_overlapped.Internal != STATUS_PENDING
+    }
+    
+    fn write_event_ready(&self) -> bool  {
+        self.write_pending && self.write_overlapped.Internal != STATUS_PENDING
+    }
+    
+    fn process_read_event(&mut self) -> usize {
+        assert!(self.read_event_ready());
+        let nbytes = self.read_overlapped.InternalHigh as usize;
+        self.read_buffer.extend(nbytes);
+        self.read_pending = false;
+        nbytes
+    }
+
+    fn process_write_event(&mut self) -> usize {
+        assert!(self.write_event_ready());
+        let nbytes = self.write_overlapped.InternalHigh as usize;
+        self.write_buffer.clear();
+        self.write_pending = false;
+        nbytes
     }
 }

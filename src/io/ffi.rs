@@ -22,6 +22,7 @@ pub type WCHAR = wchar_t;
 pub type DWORD_PTR = *mut DWORD;
 pub type LPDWORD = *mut DWORD;
 pub type LPVOID = *mut c_void;
+pub type LPCVOID = *const c_void;
 pub type ULONG_PTR = DWORD_PTR;
 pub type PULONG_PTR = *mut ULONG_PTR;
 
@@ -102,6 +103,9 @@ impl OVERLAPPED {
 pub type LPOVERLAPPED = *mut OVERLAPPED;
 
 extern "system" {
+    
+    pub fn CloseHandle(hObject: HANDLE) -> BOOL;
+    
 	pub fn CreateFileW(
   		lpFileName: LPCWSTR,
   		dwDesiredAccess: DWORD,
@@ -132,4 +136,11 @@ extern "system" {
         NumberOfBytesToRead: DWORD,
         pNumberOfBytesRead: LPDWORD,
     	pOverlapped: LPOVERLAPPED) -> BOOL;
+    
+    pub fn WriteFile(
+  		hFile: HANDLE,
+      	lpBuffer: LPCVOID,
+        nNumberOfBytesToWrite: DWORD,
+        lpNumberOfBytesWritten: LPDWORD,
+    	lpOverlapped: LPOVERLAPPED) -> BOOL;
 }
