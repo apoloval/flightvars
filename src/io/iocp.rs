@@ -79,7 +79,7 @@ impl CompletionPort {
 mod test {
     
     use std::fs::File;
-	use std::io::{BufRead, BufReader, Write};
+	use std::io::{Read, Write};
 	use std::path::Path;
 
     use tempdir::TempDir;
@@ -90,7 +90,7 @@ mod test {
 	
 	#[test]
 	fn should_read_device() {
-	    with_file_content("foobar", "This is a file with some content", |path| {
+	    with_file_content("should_read_device", "This is a file with some content", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
 	        let mut file = Device::open(path).unwrap();
 	        iocp.attach(&file).unwrap();
@@ -105,7 +105,7 @@ mod test {
 	
 	#[test]
 	fn should_write_device() {
-	    with_file_content("foobar", "", |path| {
+	    with_file_content("should_write_device", "", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
 	        let mut file = Device::open(path).unwrap();
 	        iocp.attach(&file).unwrap();
@@ -116,6 +116,29 @@ mod test {
 		    assert_eq!(event, Event::BytesWritten(32));
 		    file.close().expect("close file");
 		    assert_file_contains(path, "This is a file with some content"); 
+        });
+	}
+	
+	#[test]
+	fn should_write_device_concurrently() {
+	    with_file_content("should_write_device_concurrently", "", |path| {
+		    let mut iocp = CompletionPort::new().unwrap();
+	        let mut file = Device::open(path).unwrap();
+	        iocp.attach(&file).unwrap();
+		    file.request_write(b"This is a file with some content").expect("request write");
+		    file.request_write(b"This is Sparta").expect("request write");
+		    let dev = iocp.process_event().unwrap();
+		    assert_eq!(dev, file.id());
+		    let event = file.process_event();
+		    assert_eq!(event, Event::BytesWritten(32));
+		    let dev = iocp.process_event().unwrap();
+		    assert_eq!(dev, file.id());
+		    let event = file.process_event();
+		    assert_eq!(event, Event::BytesWritten(14));
+		    file.close().expect("close file");
+		    // Since no offset is given when writing, both writes will start at the begining
+		    // of the file. This is pointless for serial and network ports. 
+		    assert_file_contains(path, "This is Sparta with some content"); 
         });
 	}
 	
@@ -130,9 +153,9 @@ mod test {
 	}
 	
 	fn assert_file_contains(path: &Path, content: &str) {
-	    let file = File::open(path).expect("open file");
+	    let mut file = File::open(path).expect("open file");
 	    let mut line = String::new();
-	    BufReader::new(file).read_line(&mut line).expect("read file");
+	    file.read_to_string(&mut line).expect("read file");
 	    assert_eq!(line, content);
 	}
 }

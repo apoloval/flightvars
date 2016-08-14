@@ -6,6 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::boxed::Box;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
@@ -39,14 +40,25 @@ pub enum Event {
     BytesWritten(usize),
 }
 
+pub struct DeviceControlBlock {
+    buffer: Buffer,
+    overlapped: OVERLAPPED,
+}
+
+impl DeviceControlBlock {
+    pub fn new() -> DeviceControlBlock {
+        DeviceControlBlock {
+            buffer: Buffer::with_capacity(4096),
+            overlapped: OVERLAPPED::new(),
+        }
+    }
+}
+
 pub struct Device {
     handle: HANDLE,
-    read_overlapped: OVERLAPPED,
-    read_buffer: Buffer,
+    read_control_block: DeviceControlBlock,
     read_pending: bool,
-    write_overlapped: OVERLAPPED,
-    write_buffer: Buffer,
-    write_pending: bool,
+    write_control_blocks: Vec<Box<DeviceControlBlock>>,
 }
 
 impl Device {
@@ -82,12 +94,9 @@ impl Device {
     pub fn from_handle(handle: HANDLE) -> Device {
       Device {
           handle: handle,
-          read_overlapped: OVERLAPPED::new(),
-          read_buffer: Buffer::with_capacity(4096),
+          read_control_block: DeviceControlBlock::new(),
           read_pending: false,
-          write_overlapped: OVERLAPPED::new(),
-          write_buffer: Buffer::with_capacity(4096),
-          write_pending: false,
+          write_control_blocks: Vec::with_capacity(32),
       }  
     }
     
@@ -100,7 +109,7 @@ impl Device {
     }
     
     pub fn recv_bytes(&self) -> &[u8] {
-        self.read_buffer.as_slice()
+        self.read_control_block.buffer.as_slice()
     }
     
     pub fn request_read(&mut self) -> io::Result<()>{
@@ -108,10 +117,10 @@ impl Device {
         let rc = unsafe {
             ReadFile(
                 self.handle,
-                self.read_buffer.as_mut_ptr() as LPVOID,
-                self.read_buffer.remaining() as DWORD,
+                self.read_control_block.buffer.as_mut_ptr() as LPVOID,
+                self.read_control_block.buffer.remaining() as DWORD,
                 0 as LPDWORD,
-                &mut self.read_overlapped as LPOVERLAPPED)
+                &mut self.read_control_block.overlapped as LPOVERLAPPED)
         };
         if rc == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
             return Err(io::Error::last_os_error());
@@ -121,21 +130,22 @@ impl Device {
     }
     
     pub fn request_write(&mut self, data: &[u8]) -> io::Result<()> {
-        try!(self.write_buffer.write(data));
-        assert!(!self.write_pending);
+        self.write_control_blocks.push(Box::new(DeviceControlBlock::new()));
+        let cb = self.write_control_blocks.last_mut().unwrap();
+        try!(cb.buffer.write(data));
         let rc = unsafe {
             WriteFile(
                 self.handle,
-                self.write_buffer.as_ptr() as LPCVOID,
-                self.write_buffer.len() as DWORD,
+                cb.buffer.as_ptr() as LPCVOID,
+                cb.buffer.len() as DWORD,
                 0 as LPDWORD,
-                &mut self.write_overlapped as LPOVERLAPPED)
+                &mut cb.overlapped as LPOVERLAPPED)
         };
         if rc == 0 && unsafe { GetLastError() } != ERROR_IO_PENDING {
-            return Err(io::Error::last_os_error());
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
         }
-        self.write_pending = true;
-        Ok(())
     }
     
     pub fn process_event(&mut self) -> Event {
@@ -149,26 +159,27 @@ impl Device {
     }
     
     fn read_event_ready(&self) -> bool  {
-        self.read_pending && self.read_overlapped.Internal != STATUS_PENDING
+        self.read_pending && self.read_control_block.overlapped.Internal != STATUS_PENDING
     }
     
     fn write_event_ready(&self) -> bool  {
-        self.write_pending && self.write_overlapped.Internal != STATUS_PENDING
+        self.write_control_blocks
+        	.first()
+        	.iter()
+        	.any(|cb| cb.overlapped.Internal != STATUS_PENDING)
     }
     
     fn process_read_event(&mut self) -> usize {
         assert!(self.read_event_ready());
-        let nbytes = self.read_overlapped.InternalHigh as usize;
-        self.read_buffer.extend(nbytes);
+        let nbytes = self.read_control_block.overlapped.InternalHigh as usize;
+        self.read_control_block.buffer.extend(nbytes);
         self.read_pending = false;
         nbytes
     }
 
     fn process_write_event(&mut self) -> usize {
         assert!(self.write_event_ready());
-        let nbytes = self.write_overlapped.InternalHigh as usize;
-        self.write_buffer.clear();
-        self.write_pending = false;
-        nbytes
+        let cb = self.write_control_blocks.remove(0);
+        cb.overlapped.InternalHigh as usize
     }
 }

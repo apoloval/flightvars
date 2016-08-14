@@ -33,10 +33,6 @@ impl Buffer {
         assert!(new_len < self.data.capacity());
         unsafe { self.data.set_len(new_len) }; 
     }
-    
-    pub fn clear(&mut self) {
-        self.data.clear()
-    }
 }
 
 impl io::Write for Buffer {
