@@ -75,7 +75,7 @@ impl Device {
         	.encode_wide()
         	.chain(Some(0).into_iter())
         	.collect();
-        let handle = unsafe {
+        let handle = checked_handle! { valid =>
             CreateFileW(
                 encoded_path.as_ptr() as LPCWSTR,
           		GENERIC_ALL,
@@ -85,9 +85,6 @@ impl Device {
           		FILE_FLAG_OVERLAPPED,
           		0 as HANDLE)
         };
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(io::Error::last_os_error());
-        }
         Ok(Device::from_handle(handle))
     }
     

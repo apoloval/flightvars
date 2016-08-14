@@ -20,16 +20,13 @@ pub struct CompletionPort {
 
 impl CompletionPort {
     pub fn new() -> io::Result<CompletionPort> {
-        let handle = unsafe {
+        let handle = checked_handle! { not_null =>
             CreateIoCompletionPort(
                 INVALID_HANDLE_VALUE,
                 0 as HANDLE,
                 0 as ULONG_PTR,
                 0)
         };
-        if handle == 0 as HANDLE {
-            return Err(io::Error::last_os_error());
-        }
         Ok(CompletionPort {
             handle: handle,
             next_key: 1 as ULONG_PTR,

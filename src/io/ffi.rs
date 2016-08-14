@@ -102,6 +102,23 @@ impl OVERLAPPED {
 
 pub type LPOVERLAPPED = *mut OVERLAPPED;
 
+macro_rules! checked_handle {
+    (valid => $func:expr) => ({ 
+ 		let handle = unsafe { $func };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(::std::io::Error::last_os_error());
+        }
+        handle
+    });
+    (not_null => $func:expr) => ({ 
+ 		let handle = unsafe { $func };
+        if handle == 0 as HANDLE {
+            return Err(::std::io::Error::last_os_error());
+        }
+        handle
+    });
+}
+
 extern "system" {
     
     pub fn CloseHandle(hObject: HANDLE) -> BOOL;
