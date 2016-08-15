@@ -28,6 +28,10 @@ impl Buffer {
 
     pub fn as_mut_ptr(&mut self) -> *mut u8 { self.data.as_mut_ptr() }
     
+    pub fn clear(&mut self) {
+        self.data.clear()
+    }
+    
     pub fn extend(&mut self, inc: usize) {
         let new_len = self.data.len() + inc;
         assert!(new_len < self.data.capacity());

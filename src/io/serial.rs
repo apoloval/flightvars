@@ -123,11 +123,26 @@ mod test {
 		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
 		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
 		iocp.attach(&port).unwrap();
+		
 		port.request_read_bytes(6).unwrap();
 		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
 		assert_eq!(dev, port.id());
 		let event = port.process_event();
 		assert_eq!(event, Event::BytesRead(6));
 		assert_eq!(port.recv_bytes(), b"Hello\n");
+		
+		port.request_write(b"FlightVars").unwrap();
+		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
+		assert_eq!(dev, port.id());
+		let event = port.process_event();
+		assert_eq!(event, Event::BytesWritten(10));
+
+		port.reset_recv_buffer();
+		port.request_read_bytes(19).unwrap();
+		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
+		assert_eq!(dev, port.id());
+		let event = port.process_event();
+		assert_eq!(event, Event::BytesRead(19));
+		assert_eq!(port.recv_bytes(), b"Goodbye FlightVars\n");
 	}
 }

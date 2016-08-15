@@ -106,6 +106,10 @@ impl Device {
         else { Ok(()) }
     }
     
+    pub fn reset_recv_buffer(&mut self) {
+        self.read_control_block.buffer.clear()
+    }
+    
     pub fn recv_bytes(&self) -> &[u8] {
         self.read_control_block.buffer.as_slice()
     }
