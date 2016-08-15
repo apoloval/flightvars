@@ -104,11 +104,21 @@ pub struct COMMTIMEOUTS {
 } 
 
 impl COMMTIMEOUTS {
-    pub fn for_async() -> COMMTIMEOUTS {
+    pub fn read_upon_available() -> COMMTIMEOUTS {
         COMMTIMEOUTS {
             ReadIntervalTimeout: MAXDWORD,
           	ReadTotalTimeoutMultiplier: MAXDWORD,
           	ReadTotalTimeoutConstant: MAXDWORD - 1,
+          	WriteTotalTimeoutMultiplier: 0,
+          	WriteTotalTimeoutConstant: 0,
+        }
+    }
+    
+    pub fn wait_to_fill() -> COMMTIMEOUTS {
+        COMMTIMEOUTS {
+            ReadIntervalTimeout: MAXDWORD - 1,
+          	ReadTotalTimeoutMultiplier: 0,
+          	ReadTotalTimeoutConstant: 0,
           	WriteTotalTimeoutMultiplier: 0,
           	WriteTotalTimeoutConstant: 0,
         }

@@ -36,10 +36,6 @@ impl Serial {
           		0 as HANDLE)
         };
 
-		// Set the appropriate timeouts for async IO
-		let timeouts = COMMTIMEOUTS::for_async();
-		checked_result!(SetCommTimeouts(handle, &timeouts as LPCCOMMTIMEOUTS));
-		
         Ok(Serial {
             dev: Device::from_handle(handle)
         })
@@ -60,6 +56,11 @@ impl Serial {
 		// Purge the buffers to eliminate accumulated messages prior to reset
         checked_result!(PurgeComm(port.handle(), PURGE_TXCLEAR | PURGE_RXCLEAR));
 		Ok(port)
+    }
+    
+    pub fn set_timeouts(&mut self, timeouts: &COMMTIMEOUTS) -> io::Result<()> {
+		checked_result!(SetCommTimeouts(self.dev.handle(), timeouts as LPCCOMMTIMEOUTS));
+		Ok(())
     }
     
     pub fn dcb(&self) -> io::Result<DCB> {
@@ -95,23 +96,21 @@ mod test {
 
 	use io::device::*;
 	use io::iocp::*;
+	use io::ffi::*;
 
 	use super::*;
 	
 	#[test]
-	fn should_read() {
+	fn should_read_and_write() {
 	    let mut iocp = CompletionPort::new().unwrap();	    
 		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
+		port.set_timeouts(&COMMTIMEOUTS::wait_to_fill()).unwrap();
 		iocp.attach(&port).unwrap();
-		let mut pending_bytes = 6;
-		while pending_bytes > 0 {
-			port.request_read().unwrap();
-    		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-    		assert_eq!(dev, port.id());
-    		if let Event::BytesRead(bytes_read) = port.process_event() {
-    		    pending_bytes -= bytes_read;
-    		}
-		}
+		port.request_read_bytes(6).unwrap();
+		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
+		assert_eq!(dev, port.id());
+		let event = port.process_event();
+		assert_eq!(event, Event::BytesRead(6));
 		assert_eq!(port.recv_bytes(), b"Hello\n");
 	}
 }

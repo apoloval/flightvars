@@ -7,6 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::boxed::Box;
+use std::cmp;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
@@ -110,13 +111,19 @@ impl Device {
     }
     
     pub fn request_read(&mut self) -> io::Result<()>{
+        let nbytes = self.read_control_block.buffer.remaining();
+        self.request_read_bytes(nbytes)
+    }
+    
+    pub fn request_read_bytes(&mut self, nbytes: usize) -> io::Result<()>{
         assert!(!self.read_pending);
+        let total_bytes = cmp::min(nbytes, self.read_control_block.buffer.remaining());
         let offset = self.read_control_block.buffer.len() as isize;
         let rc = unsafe {
             ReadFile(
                 self.handle,
                 self.read_control_block.buffer.as_mut_ptr().offset(offset) as LPVOID,
-                self.read_control_block.buffer.remaining() as DWORD,
+                total_bytes as DWORD,
                 0 as LPDWORD,
                 &mut self.read_control_block.overlapped as LPOVERLAPPED)
         };
