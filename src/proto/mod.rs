@@ -8,26 +8,27 @@
 
 use std::io;
 
-use domain::{Client, Command, Event};
+mod oacsp;
 
-pub mod oacsp;
+use types::{Value, Var};
 
-pub trait CommandRead {
-    fn read_cmd(&mut self) -> io::Result<Command>;
+pub enum InputMessage {
+    Subscribe { domain: String, variable: Var },
+    Write { domain: String, variable: Var, value: Value }
 }
 
-
-pub trait EventWrite {
-    fn write_ev(&mut self, msg: &Event) -> io::Result<()>;
+pub enum OutputMessage {
+    Update { domain: String, variable: Var, value: Value }
 }
 
-
-pub trait Protocol<I, O> {
-    type Read: CommandRead;
-    type Write: EventWrite;
-    fn name(&self) -> &str;
-    fn reader(&self, input: I, id: Client) -> Self::Read;
-    fn writer(&self, output: O) -> Self::Write;
+pub trait Protocol {
+    /// Decode a message from its serialized bytes.
+    ///
+    /// A common cause of failure is that no enough bytes were still received in
+    /// that input. In that case, an error with a `io::ErrorKind::UnexpectedEof` 
+    /// will be produced as result.
+    fn decode<R: io::Read>(&mut self, input: &R) -> io::Result<InputMessage>;
+    
+    /// Encode a message into its serialized bytes.
+    fn encode<W: io::Write>(&mut self, message: &OutputMessage, output: &W) -> io::Result<()>;
 }
-
-pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }

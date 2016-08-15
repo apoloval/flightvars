@@ -23,7 +23,8 @@ extern crate ws2_32;
 // mod comm;
 mod io;
 // mod port;
-// mod proto;
+mod proto;
+mod types;
 // mod util;
 
 #[cfg(windows)]

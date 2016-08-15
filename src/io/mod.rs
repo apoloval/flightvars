@@ -13,3 +13,5 @@ mod buffer;
 mod device;
 mod iocp;
 mod serial;
+
+pub use self::device::*;

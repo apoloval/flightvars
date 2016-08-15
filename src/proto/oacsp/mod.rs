@@ -8,34 +8,29 @@
 
 use std::io;
 
-use domain::Client;
 use proto::*;
 
 mod input;
-mod output;
-mod reader;
-mod writer;
+//mod output;
+//mod reader;
+//mod writer;
 
-use self::input::*;
-use self::output::*;
-pub use self::reader::*;
-pub use self::writer::*;
+//use self::input::*;
+//use self::output::*;
+//pub use self::reader::*;
+//pub use self::writer::*;
 
-
-#[derive(Clone)]
 pub struct Oacsp;
 
-impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
-    type Read = CommandReader<MessageIter<R>>;
-    type Write = EventWriter<MessageConsumer<W>>;
+impl Protocol for Oacsp {
     
-    fn name(&self) -> &str { "oacsp" }
-
-    fn reader(&self, input: R, id: Client) -> CommandReader<MessageIter<R>> {
-        CommandReader::new(MessageIter::new(input), id)
+    fn decode<R: io::Read>(&mut self, input: &R) -> io::Result<InputMessage> {
+        unimplemented!()
     }
-
-    fn writer(&self, output: W) -> EventWriter<MessageConsumer<W>> {
-        EventWriter::new(MessageConsumer::new(output))
+    
+    fn encode<W: io::Write>(&mut self, message: &OutputMessage, output: &W) -> io::Result<()> {
+        unimplemented!()
     }
+    
 }
+

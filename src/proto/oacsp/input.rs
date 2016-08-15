@@ -9,11 +9,10 @@
 use std::io;
 use std::str::FromStr;
 
-use domain::types::*;
-use domain::fsuipc::types::*;
+use types::*;
 
 #[derive(Debug, PartialEq)]
-pub enum InputMessage {
+pub enum RawInputMessage {
     Begin { version: u16, client_id: String },
     WriteLvar { lvar: String, value: Value },
     WriteOffset { offset: Offset, value: Value },
@@ -21,32 +20,32 @@ pub enum InputMessage {
     ObserveOffset { offset: Offset },
 }
 
-impl InputMessage {
+impl RawInputMessage {
 
-    pub fn begin(version: u16, client_id: &str) -> InputMessage {
-        InputMessage::Begin { version: version, client_id: client_id.to_string() }
+    pub fn begin(version: u16, client_id: &str) -> RawInputMessage {
+        RawInputMessage::Begin { version: version, client_id: client_id.to_string() }
     }
 
-    pub fn write_lvar(lvar: &str, value: Value) -> InputMessage {
-        InputMessage::WriteLvar { lvar: lvar.to_string(), value: value }
+    pub fn write_lvar(lvar: &str, value: Value) -> RawInputMessage {
+        RawInputMessage::WriteLvar { lvar: lvar.to_string(), value: value }
     }
 
-    pub fn write_offset(offset: Offset, value: Value) -> InputMessage {
-        InputMessage::WriteOffset { offset: offset, value: value }
+    pub fn write_offset(offset: Offset, value: Value) -> RawInputMessage {
+        RawInputMessage::WriteOffset { offset: offset, value: value }
     }
 
-    pub fn obs_lvar(lvar: &str) -> InputMessage {
-        InputMessage::ObserveLvar { lvar: lvar.to_string() }
+    pub fn obs_lvar(lvar: &str) -> RawInputMessage {
+        RawInputMessage::ObserveLvar { lvar: lvar.to_string() }
     }
 
-    pub fn obs_offset(offset: Offset) -> InputMessage {
-        InputMessage::ObserveOffset { offset: offset }
+    pub fn obs_offset(offset: Offset) -> RawInputMessage {
+        RawInputMessage::ObserveOffset { offset: offset }
     }
 }
 
-impl FromStr for InputMessage {
+impl FromStr for RawInputMessage {
     type Err = io::Error;
-    fn from_str(s: &str) -> Result<InputMessage, io::Error> {
+    fn from_str(s: &str) -> io::Result<RawInputMessage> {
         let deco = MessageParser::new(s);
         deco.parse()
     }
@@ -62,7 +61,7 @@ impl<'a> MessageParser<'a> {
         MessageParser { input: input }
     }
 
-    pub fn parse(self) -> io::Result<InputMessage> {
+    pub fn parse(self) -> io::Result<RawInputMessage> {
         if self.input.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput, "cannot parse oacsp message from empty line"));
@@ -80,34 +79,34 @@ impl<'a> MessageParser<'a> {
         }
     }
 
-    fn parse_begin(self, args: &[&str]) -> io::Result<InputMessage> {
+    fn parse_begin(self, args: &[&str]) -> io::Result<RawInputMessage> {
         try!(self.require_argc(args, 2));
         let ver = try!(args[0].parse().map_err(|_| self.input_error()));
-        Ok(InputMessage::begin(ver, args[1]))
+        Ok(RawInputMessage::begin(ver, args[1]))
     }
 
-    fn parse_write_lvar(self, args: &[&str]) -> io::Result<InputMessage> {
+    fn parse_write_lvar(self, args: &[&str]) -> io::Result<RawInputMessage> {
         try!(self.require_argc(args, 2));
         let lvar = args[0];
-        let value = try!(Value::parse_int(args[1]).map_err(|_| self.input_error()));
-        Ok(InputMessage::write_lvar(&lvar, value))
+        let value = try!(args[1].parse().map(Value::Number).map_err(|_| self.input_error()));
+        Ok(RawInputMessage::write_lvar(&lvar, value))
     }
 
-    fn parse_write_offset(self, args: &[&str]) -> io::Result<InputMessage> {
+    fn parse_write_offset(self, args: &[&str]) -> io::Result<RawInputMessage> {
         try!(self.require_argc(args, 2));
         let offset: Offset = try!(args[0].parse());
-        let value = try!(offset.parse_value(args[1]).map_err(|_| self.input_error()));
-        Ok(InputMessage::write_offset(offset, value))
+        let value = try!(args[1].parse().map(Value::Number).map_err(|_| self.input_error()));
+        Ok(RawInputMessage::write_offset(offset, value))
     }
 
-    fn parse_obs_lvar(self, args: &[&str]) -> io::Result<InputMessage> {
+    fn parse_obs_lvar(self, args: &[&str]) -> io::Result<RawInputMessage> {
         try!(self.require_argc(args, 1));
-        Ok(InputMessage::obs_lvar(args[0]))
+        Ok(RawInputMessage::obs_lvar(args[0]))
     }
 
-    fn parse_obs_offset(self, args: &[&str]) -> io::Result<InputMessage> {
+    fn parse_obs_offset(self, args: &[&str]) -> io::Result<RawInputMessage> {
         try!(self.require_argc(args, 1));
-        Ok(InputMessage::obs_offset(try!(args[0].parse())))
+        Ok(RawInputMessage::obs_offset(try!(args[0].parse())))
     }
 
     fn require_argc(&self, args: &[&str], expected: usize) -> io::Result<()> {
@@ -122,98 +121,56 @@ impl<'a> MessageParser<'a> {
     }
 }
 
-pub struct MessageIter<R: io::Read> {
-    input: io::BufReader<R>
-}
-
-impl<R: io::Read> MessageIter<R> {
-    pub fn new(input: R) -> MessageIter<R> {
-        MessageIter { input: io::BufReader::new(input) }
-    }
-}
-
-impl<R: io::Read> Iterator for MessageIter<R> {
-
-    type Item = io::Result<InputMessage>;
-    fn next(&mut self) -> Option<io::Result<InputMessage>> {
-        use std::io::BufRead;
-        let mut line = String::new();
-        match self.input.read_line(&mut line) {
-            Ok(0) => return None,
-            Err(e) => return Some(Err(e)),
-            _ => {},
-        }
-        Some(line.trim().parse())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
-    use domain::types::*;
-    use domain::fsuipc::types::*;
+    use types::*;
 
     use super::*;
 
     #[test]
     fn should_parse_begin_msg() {
         let buf = "BEGIN 1 arduino";
-        let msg = InputMessage::from_str(&buf).unwrap();
-        assert_eq!(msg, InputMessage::begin(1, "arduino"));
+        let msg = RawInputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, RawInputMessage::begin(1, "arduino"));
     }
 
     #[test]
     fn should_parse_write_lvar_msg() {
         let buf = "WRITE_LVAR foobar 42";
-        let msg = InputMessage::from_str(&buf).unwrap();
-        assert_eq!(msg, InputMessage::write_lvar("foobar", Value::Int(42)));
+        let msg = RawInputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, RawInputMessage::write_lvar("foobar", Value::Number(42)));
     }
 
     #[test]
     fn should_parse_write_offset_msg() {
-        let buf = "WRITE_OFFSET 1234:UW 42";
-        let msg = InputMessage::from_str(&buf).unwrap();
+        let buf = "WRITE_OFFSET 1234+2 42";
+        let msg = RawInputMessage::from_str(&buf).unwrap();
         assert_eq!(
             msg,
-            InputMessage::write_offset(
-                Offset::new(OffsetAddr::from(0x1234),
-                OffsetLen::UnsignedWord),
-                Value::UnsignedInt(42)));
+            RawInputMessage::write_offset(
+                Offset::from(0x1234, 2).unwrap(),
+                Value::Number(42)));
     }
 
     #[test]
     fn should_parse_obs_lvar_msg() {
         let buf = "OBS_LVAR foobar";
-        let msg = InputMessage::from_str(&buf).unwrap();
-        assert_eq!(msg, InputMessage::obs_lvar("foobar"));
+        let msg = RawInputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, RawInputMessage::obs_lvar("foobar"));
     }
 
     #[test]
     fn should_parse_obs_offset_msg() {
-        let buf = "OBS_OFFSET 330:UW";
-        let msg = InputMessage::from_str(&buf).unwrap();
-        assert_eq!(msg, InputMessage::obs_offset(
-            Offset::new(OffsetAddr::from(0x0330), OffsetLen::UnsignedWord)));
+        let buf = "OBS_OFFSET 330+2";
+        let msg = RawInputMessage::from_str(&buf).unwrap();
+        assert_eq!(msg, RawInputMessage::obs_offset(Offset::from(0x0330, 2).unwrap()));
     }
 
     #[test]
     fn should_fail_to_parse_empty_line() {
         let buf = "";
-        assert!(InputMessage::from_str(&buf).is_err());
-    }
-
-    #[test]
-    fn should_iterate_messages_from_read() {
-        let buf = b"BEGIN 1 arduino\nOBS_LVAR foobar\nwrong line\n\nWRITE_LVAR foobar 42";
-        let mut iter = MessageIter::new(&buf[..]);
-        assert_eq!(iter.next().unwrap().unwrap(), InputMessage::begin(1, "arduino"));
-        assert_eq!(iter.next().unwrap().unwrap(), InputMessage::obs_lvar("foobar"));
-        assert!(iter.next().unwrap().is_err());
-        assert!(iter.next().unwrap().is_err());
-        assert_eq!(
-            iter.next().unwrap().unwrap(),
-            InputMessage::write_lvar("foobar", Value::Int(42)));
-        assert!(iter.next().is_none());
+        assert!(RawInputMessage::from_str(&buf).is_err());
     }
 }
