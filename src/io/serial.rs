@@ -14,6 +14,23 @@ use std::os::windows::ffi::OsStrExt;
 use super::device::*;
 use super::ffi::*;
 
+pub enum SerialTimeouts {
+    /// Read any byte upon available in input buffers
+    ReadUponAvailable,
+    
+    /// Wait for all requested bytes to be available
+    WaitToFill,
+}
+
+impl SerialTimeouts {
+    fn as_raw(&self) -> COMMTIMEOUTS {
+        match *self {
+            SerialTimeouts::ReadUponAvailable => COMMTIMEOUTS::read_upon_available(),
+            SerialTimeouts::WaitToFill => COMMTIMEOUTS::wait_to_fill(),
+        }
+    }
+}
+
 pub struct Serial {
     dev: Device
 }
@@ -58,8 +75,9 @@ impl Serial {
 		Ok(port)
     }
     
-    pub fn set_timeouts(&mut self, timeouts: &COMMTIMEOUTS) -> io::Result<()> {
-		checked_result!(SetCommTimeouts(self.dev.handle(), timeouts as LPCCOMMTIMEOUTS));
+    pub fn set_timeouts(&mut self, timeouts: &SerialTimeouts) -> io::Result<()> {
+        let raw = timeouts.as_raw();
+		checked_result!(SetCommTimeouts(self.dev.handle(), &raw as LPCCOMMTIMEOUTS));
 		Ok(())
     }
     
@@ -96,7 +114,6 @@ mod test {
 
 	use io::device::*;
 	use io::iocp::*;
-	use io::ffi::*;
 
 	use super::*;
 	
@@ -104,7 +121,7 @@ mod test {
 	fn should_read_and_write() {
 	    let mut iocp = CompletionPort::new().unwrap();	    
 		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
-		port.set_timeouts(&COMMTIMEOUTS::wait_to_fill()).unwrap();
+		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
 		iocp.attach(&port).unwrap();
 		port.request_read_bytes(6).unwrap();
 		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
