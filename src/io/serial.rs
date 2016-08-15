@@ -117,7 +117,30 @@ mod test {
 
 	use super::*;
 	
+	/// A test that uses an Arduino board connected to serial port to interact with the machine.
+    /// The following Arduino sketch is suggested:
+    ///
+    /// ```c++
+    /// void setup() {
+    ///   Serial.begin(9600);
+    ///   Serial.setTimeout(50);
+    /// }
+
+    /// void loop() {
+    ///   Serial.write("Hello\n");
+    ///   String s = "";
+    ///   while (s.length() == 0) {
+    ///     s = Serial.readString();
+    ///   }
+    ///   Serial.write("Goodbye ");
+    ///   Serial.write(s.c_str());
+    ///   Serial.write("\n");
+    /// }
+    ///```
+    ///
+    /// Remove the #[ignore] attribute and set the correct COM port to execute it.
 	#[test]
+	#[ignore]
 	fn should_read_and_write() {
 	    let mut iocp = CompletionPort::new().unwrap();	    
 		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
