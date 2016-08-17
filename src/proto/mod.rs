@@ -48,5 +48,5 @@ pub trait Protocol {
     fn decode<R: io::Read>(&mut self, input: R) -> io::Result<Decoded>;
     
     /// Encode a message into its serialized bytes.
-    fn encode<W: io::Write>(&mut self, message: &OutputMessage, output: &W) -> io::Result<()>;
+    fn encode<W: io::Write>(&mut self, message: OutputMessage, output: &mut W) -> io::Result<()>;
 }

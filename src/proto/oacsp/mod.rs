@@ -14,16 +14,10 @@ use proto::*;
 use types::*;
 
 mod input;
-//mod output;
-//mod reader;
-//mod writer;
-
-//use self::input::*;
-//use self::output::*;
-//pub use self::reader::*;
-//pub use self::writer::*;
+mod output;
 
 use self::input::RawInputMessage;
+use self::output::RawOutputMessage;
 
 pub struct Oacsp {
     client_id: Option<String>
@@ -74,8 +68,30 @@ impl Protocol for Oacsp {
         }                
     }
     
-    fn encode<W: io::Write>(&mut self, _message: &OutputMessage, _output: &W) -> io::Result<()> {
-        unimplemented!()
+    fn encode<W: io::Write>(&mut self, message: OutputMessage, output: &mut W) -> io::Result<()> {
+        match message {
+            OutputMessage::Update { 
+                    ref domain, 
+                    variable: Var::Offset(offset), 
+                    value } if domain == "fsuipc" => {
+                let raw = RawOutputMessage::EventOffset { offset: offset, value: value };
+                try!(write!(output, "{}\n", raw));
+                Ok(())
+            }
+            OutputMessage::Update { 
+                    ref domain, 
+                    variable: Var::Named(ref lvar), 
+                    value } if domain == "lvar" => {
+                let raw = RawOutputMessage::EventLvar { lvar: lvar.clone(), value: value };
+                try!(write!(output, "{}\n", raw));
+                Ok(())
+            }
+            _ => {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("cannot encode message {:?}", message)))
+            }
+        }        
     }
     
 }
@@ -168,4 +184,30 @@ mod test {
         let error = oacsp.decode(b"OBS_OFFSET 1234+2" as &[u8]).unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }    
+
+    #[test]
+    fn should_encode_update_offset() {
+        let mut oacsp = Oacsp::new();
+        let mut buf = Vec::new();
+        let msg = OutputMessage::Update {
+            domain: "fsuipc".to_string(),
+            variable: Var::offset(0x1234, 2).unwrap(),
+            value: Value::Number(42),
+        };
+        oacsp.encode(msg, &mut buf).unwrap();        
+        assert_eq!(&buf, b"EVENT_OFFSET 1234+2 42\n");
+    }        
+
+    #[test]
+    fn should_encode_update_lvar() {
+        let mut oacsp = Oacsp::new();
+        let mut buf = Vec::new();
+        let msg = OutputMessage::Update {
+            domain: "lvar".to_string(),
+            variable: Var::named("foobar"),
+            value: Value::Number(42),
+        };
+        oacsp.encode(msg, &mut buf).unwrap();        
+        assert_eq!(&buf, b"EVENT_LVAR foobar 42\n");
+    }        
 }
