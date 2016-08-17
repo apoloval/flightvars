@@ -10,9 +10,6 @@ use std::fmt;
 use std::io;
 use std::str;
 
-use byteorder::{LittleEndian, ReadBytesExt};
-use hex::FromHex;
-
 /// An offset into a data vector.
 ///
 /// Some domains uses 16-bits offsets to reference an specific item in a data vector.
@@ -58,22 +55,13 @@ impl str::FromStr for Offset {
     }
 }
 
-/// The width of the data into a data vector.
-///
-/// 
-pub enum DataWidth {
-    Byte,
-    Word,
-    DWord
-}
-
 /// A domain-agnostic variable
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Var {
     /// A variable referenced by its name. 
     Named(String),
-    /// A variable referenced by its offset and length.
-    Offset(Offset, usize),
+    /// A variable referenced by its offset and width.
+    Offset(Offset),
 }
 
 impl Var {
@@ -122,8 +110,6 @@ impl fmt::Display for Value {
 mod tests {
     use std::io;
     use std::str::FromStr;
-
-    use hex::FromHex;
 
     use super::*;
 
