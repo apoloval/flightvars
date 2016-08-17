@@ -18,7 +18,7 @@ extern crate tempdir;
 extern crate toml;
 extern crate ws2_32;
 
-// mod domain;
+mod domain;
 // #[cfg(windows)] mod fsx;
 // mod comm;
 mod io;
