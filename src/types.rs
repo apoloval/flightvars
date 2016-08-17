@@ -65,11 +65,14 @@ pub enum Var {
 }
 
 impl Var {
-	#[cfg(test)]
     pub fn named(n: &str) -> Var { Var::Named(n.to_string()) }
+    
+    pub fn offset(addr: u16, width: u8) -> Option<Var> {
+        Offset::from(addr, width).map(Var::Offset)
+    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Value {
     Bool(bool),
     Number(isize),
