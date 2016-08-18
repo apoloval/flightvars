@@ -8,31 +8,15 @@
 
 use std::boxed::Box;
 use std::cmp;
-use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
+use types::*;
+
 use super::buffer::Buffer;
 use super::ffi::*;
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct DeviceId(ULONG_PTR);
-
-impl DeviceId {
-    pub fn from_raw(raw: ULONG_PTR) -> DeviceId {
-        DeviceId(raw)
-    }
-    
-    pub fn as_raw(&self) -> ULONG_PTR { self.0 }
-}
-
-impl Hash for DeviceId {
-    fn hash<H>(&self, state: &mut H) where H: Hasher {
-        self.0.hash(state)
-    }
-}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Event {
@@ -65,7 +49,7 @@ pub struct Device {
 impl Device {
     
     pub fn id(&self) -> DeviceId {
-        DeviceId(self.handle as ULONG_PTR)
+        self.handle as DeviceId
     }
     
     pub fn handle(&self) -> HANDLE { self.handle }

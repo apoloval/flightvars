@@ -10,12 +10,13 @@ use std::collections::HashSet;
 use std::io;
 use std::time::Duration;
 
+use types::*;
+
 use super::device::*;
 use super::ffi::*;
 
 pub struct CompletionPort {
     handle: HANDLE,
-    next_key: ULONG_PTR,
     devices: HashSet<DeviceId>,
 }
 
@@ -30,7 +31,6 @@ impl CompletionPort {
         };
         Ok(CompletionPort {
             handle: handle,
-            next_key: 1 as ULONG_PTR,
             devices: HashSet::new(),
         })
     }
@@ -38,14 +38,12 @@ impl CompletionPort {
     pub fn attach(&mut self, dev: &Device) -> io::Result<()> {
         let handle = dev.handle();
         let id = dev.id();
-        let key = id.as_raw();
-        self.next_key = (self.next_key as DWORD + 1) as ULONG_PTR;
         self.devices.insert(id);
         unsafe {            
             let rc = CreateIoCompletionPort(
                 handle,
                 self.handle,
-                key as ULONG_PTR,
+                id as ULONG_PTR,
                 0);
             if rc == 0 as HANDLE {
                 return Err(io::Error::last_os_error());
@@ -72,7 +70,7 @@ impl CompletionPort {
                 return Err(io::Error::last_os_error());
             }
         };
-        Ok(DeviceId::from_raw(key))
+        Ok(key as DeviceId)
     }
 }
 
