@@ -6,7 +6,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::io;
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ use super::ffi::*;
 
 pub struct CompletionPort {
     handle: HANDLE,
-    devices: HashSet<DeviceId>,
+    devices: HashMap<DeviceId, Device>,
 }
 
 impl CompletionPort {
@@ -31,14 +31,13 @@ impl CompletionPort {
         };
         Ok(CompletionPort {
             handle: handle,
-            devices: HashSet::new(),
+            devices: HashMap::new(),
         })
     }
         
-    pub fn attach(&mut self, dev: &Device) -> io::Result<()> {
+    pub fn attach(&mut self, dev: Device) -> io::Result<DeviceId> {
         let handle = dev.handle();
         let id = dev.id();
-        self.devices.insert(id);
         unsafe {            
             let rc = CreateIoCompletionPort(
                 handle,
@@ -49,7 +48,16 @@ impl CompletionPort {
                 return Err(io::Error::last_os_error());
             }
         }
-        Ok(())
+        self.devices.insert(id, dev);
+        Ok(id)
+    }
+    
+    pub fn detach(&mut self, id: DeviceId) -> Option<Device> {
+        self.devices.remove(&id)
+    }
+    
+    pub fn device(&mut self, id: DeviceId) -> Option<&mut Device> {
+        self.devices.get_mut(&id)
     }
     
     pub fn process_event(&mut self, timeout: &Duration) -> io::Result<DeviceId> {
@@ -92,14 +100,14 @@ mod test {
 	fn should_read_device() {
 	    with_file_content("should_read_device", "This is a file with some content", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
-	        let mut file = Device::open(path).unwrap();
-	        iocp.attach(&file).unwrap();
-		    file.request_read().expect("request read");
+	        let file = Device::open(path).unwrap();
+	        let id = iocp.attach(file).unwrap();
+		    iocp.device(id).unwrap().request_read().expect("request read");
 		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-		    assert_eq!(dev, file.id());
-		    let event = file.process_event();
+		    assert_eq!(dev, id);
+		    let event = iocp.device(id).unwrap().process_event();
 		    assert_eq!(event, Event::BytesRead(32));
-		    assert_eq!(file.recv_bytes(), b"This is a file with some content"); 
+		    assert_eq!(iocp.device(id).unwrap().recv_bytes(), b"This is a file with some content"); 
         });
 	}
 	
@@ -107,14 +115,14 @@ mod test {
 	fn should_write_device() {
 	    with_file_content("should_write_device", "", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
-	        let mut file = Device::open(path).unwrap();
-	        iocp.attach(&file).unwrap();
-		    file.request_write(b"This is a file with some content").expect("request write");
+	        let file = Device::open(path).unwrap();
+	        let id = iocp.attach(file).unwrap();
+		    iocp.device(id).unwrap().request_write(b"This is a file with some content").expect("request write");
 		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-		    assert_eq!(dev, file.id());
-		    let event = file.process_event();
+		    assert_eq!(dev, id);
+		    let event = iocp.device(id).unwrap().process_event();
 		    assert_eq!(event, Event::BytesWritten(32));
-		    file.close().expect("close file");
+		    iocp.detach(id).unwrap().close().expect("close file");
 		    assert_file_contains(path, "This is a file with some content"); 
         });
 	}
@@ -123,19 +131,19 @@ mod test {
 	fn should_write_device_concurrently() {
 	    with_file_content("should_write_device_concurrently", "", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
-	        let mut file = Device::open(path).unwrap();
-	        iocp.attach(&file).unwrap();
-		    file.request_write(b"This is a file with some content").expect("request write");
-		    file.request_write(b"This is Sparta").expect("request write");
+	        let file = Device::open(path).unwrap();
+	        let id = iocp.attach(file).unwrap();
+		    iocp.device(id).unwrap().request_write(b"This is a file with some content").expect("request write");
+		    iocp.device(id).unwrap().request_write(b"This is Sparta").expect("request write");
 		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-		    assert_eq!(dev, file.id());
-		    let event = file.process_event();
+		    assert_eq!(dev, id);
+		    let event = iocp.device(id).unwrap().process_event();
 		    assert_eq!(event, Event::BytesWritten(32));
 		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-		    assert_eq!(dev, file.id());
-		    let event = file.process_event();
+		    assert_eq!(dev, id);
+		    let event = iocp.device(id).unwrap().process_event();
 		    assert_eq!(event, Event::BytesWritten(14));
-		    file.close().expect("close file");
+		    iocp.detach(id).unwrap().close().expect("close file");
 		    // Since no offset is given when writing, both writes will start at the begining
 		    // of the file. This is pointless for serial and network ports. 
 		    assert_file_contains(path, "This is Sparta with some content"); 

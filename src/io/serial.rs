@@ -91,6 +91,10 @@ impl Serial {
         checked_result!(SetCommState(self.dev.handle(), dcb as LPCDCB));
         Ok(())
     }
+    
+    pub fn as_device(self) -> Device {
+        self.dev
+    }
 }
 
 impl Deref for Serial {
@@ -145,27 +149,27 @@ mod test {
 	    let mut iocp = CompletionPort::new().unwrap();	    
 		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
 		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
-		iocp.attach(&port).unwrap();
+		let id = iocp.attach(port.as_device()).unwrap();
 		
-		port.request_read_bytes(6).unwrap();
+		iocp.device(id).unwrap().request_read_bytes(6).unwrap();
 		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-		assert_eq!(dev, port.id());
-		let event = port.process_event();
+		assert_eq!(dev, id);
+		let event = iocp.device(id).unwrap().process_event();
 		assert_eq!(event, Event::BytesRead(6));
-		assert_eq!(port.recv_bytes(), b"Hello\n");
+		assert_eq!(iocp.device(id).unwrap().recv_bytes(), b"Hello\n");
 		
-		port.request_write(b"FlightVars").unwrap();
+		iocp.device(id).unwrap().request_write(b"FlightVars").unwrap();
 		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-		assert_eq!(dev, port.id());
-		let event = port.process_event();
+		assert_eq!(dev, id);
+		let event = iocp.device(id).unwrap().process_event();
 		assert_eq!(event, Event::BytesWritten(10));
 
-		port.reset_recv_buffer();
-		port.request_read_bytes(19).unwrap();
+		iocp.device(id).unwrap().reset_recv_buffer();
+		iocp.device(id).unwrap().request_read_bytes(19).unwrap();
 		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-		assert_eq!(dev, port.id());
-		let event = port.process_event();
+		assert_eq!(dev, id);
+		let event = iocp.device(id).unwrap().process_event();
 		assert_eq!(event, Event::BytesRead(19));
-		assert_eq!(port.recv_bytes(), b"Goodbye FlightVars\n");
+		assert_eq!(iocp.device(id).unwrap().recv_bytes(), b"Goodbye FlightVars\n");
 	}
 }
