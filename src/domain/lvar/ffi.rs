@@ -14,29 +14,6 @@ use libc::c_char;
 
 pub type Id = i32;
 
-pub fn check_named_variable(name: &str) -> Option<Id> {
-    unsafe {
-        let func = (*Panels).check_named_variable;
-        let name = CString::new(name).unwrap();
-        let id = (func)(name.as_ptr());
-        if id != -1 { Some(id) } else { None }
-    }
-}
-
-pub fn get_named_variable_value(id: Id) -> f64 {
-    unsafe {
-        let func = (*Panels).get_named_variable_value;
-        (func)(id)
-    }
-}
-
-pub fn set_named_variable_value(id: Id, value: f64) {
-    unsafe {
-        let func = (*Panels).set_named_variable_value;
-        (func)(id, value)
-    }
-}
-
 type Bool = i32;
 type Enum = i32;
 type Flags32 = u32;

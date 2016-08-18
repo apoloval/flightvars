@@ -11,6 +11,7 @@ use std::io;
 use types::*;
 
 mod fsuipc;
+mod lvar;
 
 pub trait Domain {
     fn write(&mut self, variable: &Var, value: &Value) -> io::Result<()>;
