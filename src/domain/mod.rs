@@ -6,16 +6,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::result;
+use std::io;
 
 use types::*;
 
-pub enum Error {}
+mod fsuipc;
 
-pub type Result<T> = result::Result<T, Error>;
-
-pub trait Domain<C> {
-    fn write(variable: &Var, value: &Value) -> Result<()>;
-    fn subscribe(client: C, variable: &Var) -> Result<()>;
-    fn unsubscribe_all(client: C) -> Result<()>;
+pub trait Domain {
+    fn write(&mut self, variable: &Var, value: &Value) -> io::Result<()>;
+    fn subscribe(&mut self, device: DeviceId, variable: &Var) -> io::Result<()>;
+    fn unsubscribe_all(&mut self, device: DeviceId) -> io::Result<()>;
+    fn poll<F: FnMut(DeviceId, Var, Value)>(&mut self, f: F) -> io::Result<()>;
 }

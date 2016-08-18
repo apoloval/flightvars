@@ -10,13 +10,16 @@ use std::fmt;
 use std::io;
 use std::str;
 
+/// Values of this type are used to identify devices. 
+pub type DeviceId = u32;
+
 /// An offset into a data vector.
 ///
 /// Some domains uses 16-bits offsets to reference an specific item in a data vector.
 /// That's the case of FSUIPC or IOCP. The `Offset` type serves to this purpose by
 /// specifying a 16-bits offset and the number of bytes the data occupies from there. 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Offset(u16, u8);
+pub struct Offset(pub u16, pub u8);
 
 impl Offset {
     pub fn from(addr: u16, size: u8) -> Option<Offset> {
@@ -80,12 +83,12 @@ pub enum Value {
 
 macro_rules! define_from_value {
     ($t:ty) => (
-        impl From<Value> for $t {
-            fn from(v: Value) -> $t {
+        impl<'a> From<&'a Value> for $t {
+            fn from(v: &Value) -> $t {
                 match v {
-                    Value::Bool(true) => 1 as $t,
-                    Value::Bool(false) => 0 as $t,
-                    Value::Number(i) => i as $t,
+                    &Value::Bool(true) => 1 as $t,
+                    &Value::Bool(false) => 0 as $t,
+                    &Value::Number(i) => i as $t,
                 }
             }
         }
