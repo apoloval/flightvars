@@ -73,14 +73,15 @@ impl Domain for Fsuipc {
         Ok(())
     }
     
-    fn poll<F: FnMut(DeviceId, Var, Value)>(&mut self, mut f: F) -> io::Result<()> {
+    fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
+        events.clear();
         let mut session = self.handle.session();
         for sub in self.subscriptions.iter_mut() {
             try!(sub.append_read(&mut session));
         }
         try!(session.process());
         for sub in self.subscriptions.iter_mut() {
-            sub.trigger_event(&mut f);
+            sub.trigger_event(events);
         }
         Ok(())
     }
@@ -102,7 +103,7 @@ impl Subscription {
         session.read_bytes(offset, buffer, nbytes)
     }
 
-    pub fn trigger_event<F: FnMut(DeviceId, Var, Value)>(&mut self, f: &mut F) {
+    pub fn trigger_event(&mut self, events: &mut Vec<Event>) {
         let must_trigger = self.retain.as_ref().map(|v| *v != self.buffer).unwrap_or(true);
         if must_trigger {
             let value = match self.offset.1 {
@@ -112,7 +113,8 @@ impl Subscription {
                 _ => unreachable!(),  
             };
             self.retain = Some(self.buffer);
-            f(self.device, Var::Offset(self.offset), value);
+            let event = Event::new(self.device, Var::Offset(self.offset), value);
+            events.push(event);
         }
     }
 }

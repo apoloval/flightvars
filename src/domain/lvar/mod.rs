@@ -70,9 +70,10 @@ impl Domain for LVar {
         Ok(())
     }
     
-    fn poll<F: FnMut(DeviceId, Var, Value)>(&mut self, mut f: F) -> io::Result<()> {
+    fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
+        events.clear();
         for sub in self.subscriptions.iter_mut() {
-            sub.trigger_event(&mut f);
+            sub.trigger_event(events);
         }
         Ok(())
     }    
@@ -85,13 +86,14 @@ struct Subscription {
 }
 
 impl Subscription {
-    fn trigger_event<F: FnMut(DeviceId, Var, Value)>(&mut self, f: &mut F) {
+    fn trigger_event(&mut self, events: &mut Vec<Event>) {
         let id = check_named_variable(&self.lvar).unwrap();
         let val = Value::Number(get_named_variable_value(id) as isize);
         let must_trigger = self.retain.as_ref().map(|v| *v != val).unwrap_or(true);
         if must_trigger {
             let var = Var::Named(self.lvar.clone());
-            f(self.device, var, val);
+            let event = Event::new(self.device, var, val);
+            events.push(event);
         }
     }
 }

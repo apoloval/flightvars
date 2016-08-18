@@ -13,9 +13,25 @@ use types::*;
 mod fsuipc;
 mod lvar;
 
+pub struct Event {
+    pub device: DeviceId,
+    pub variable: Var,
+    pub value: Value,
+}
+
+impl Event {
+    pub fn new(device: DeviceId, variable: Var, value: Value) -> Event {
+        Event {
+            device: device,
+            variable: variable,
+            value: value,
+        }
+    }
+}
+
 pub trait Domain {
     fn write(&mut self, variable: &Var, value: &Value) -> io::Result<()>;
     fn subscribe(&mut self, device: DeviceId, variable: &Var) -> io::Result<()>;
     fn unsubscribe_all(&mut self, device: DeviceId) -> io::Result<()>;
-    fn poll<F: FnMut(DeviceId, Var, Value)>(&mut self, f: F) -> io::Result<()>;
+    fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()>;
 }
