@@ -114,7 +114,7 @@ impl DerefMut for Serial {
 #[cfg(test)]
 mod test {
 
-	use std::time::Duration;
+	use std::{thread, time};
 
 	use io::device::*;
 	use io::iocp::*;
@@ -146,30 +146,55 @@ mod test {
 	#[test]
 	#[ignore]
 	fn should_read_and_write() {
-	    let mut iocp = CompletionPort::new().unwrap();	    
-		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
-		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
-		let id = iocp.attach(port.as_device()).unwrap();
-		
-		iocp.device(id).unwrap().request_read_bytes(6).unwrap();
-		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-		assert_eq!(dev, id);
-		let event = iocp.device(id).unwrap().process_event();
-		assert_eq!(event, Event::BytesRead(6));
-		assert_eq!(iocp.device(id).unwrap().recv_bytes(), b"Hello\n");
-		
-		iocp.device(id).unwrap().request_write(b"FlightVars").unwrap();
-		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-		assert_eq!(dev, id);
-		let event = iocp.device(id).unwrap().process_event();
-		assert_eq!(event, Event::BytesWritten(10));
-
-		iocp.device(id).unwrap().reset_recv_buffer();
-		iocp.device(id).unwrap().request_read_bytes(19).unwrap();
-		let dev = iocp.process_event(&Duration::from_millis(5000)).unwrap();
-		assert_eq!(dev, id);
-		let event = iocp.device(id).unwrap().process_event();
-		assert_eq!(event, Event::BytesRead(19));
-		assert_eq!(iocp.device(id).unwrap().recv_bytes(), b"Goodbye FlightVars\n");
+	    let mut handler = EchoHandler::new();
+	    {
+    	    let mut iocp = CompletionPort::new().unwrap();	    
+    		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
+    		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
+    		let id = iocp.attach(port.as_device(), |dev, event| handler.process_event(dev, event)).unwrap();
+    		
+    		// Wait for Arduino to completely boot
+    		thread::sleep(time::Duration::from_millis(2000));
+    		
+	        iocp.device(id).unwrap().request_read_bytes(6).unwrap();
+    		loop {
+    		    if iocp.process_event(&time::Duration::from_millis(100)).is_err() {
+    		        break
+    		    }
+    		}
+	    }
+	}
+	
+	struct EchoHandler {
+	    hello_received: bool,
+	}
+	
+	impl EchoHandler {
+	    
+	    fn new() -> EchoHandler {
+	        EchoHandler { hello_received: false }
+	    }
+	    
+	    fn process_event(&mut self, dev: &mut Device, event: Event) {
+	        match event {
+	            Event::BytesRead(nbytes) if !self.hello_received => {
+	                assert_eq!(nbytes, 6);
+	                assert_eq!(dev.recv_bytes(), b"Hello\n");
+	                dev.request_write(b"FlightVars").unwrap();
+	                self.hello_received = true;
+	            }
+	            Event::BytesWritten(nbytes) => {
+	                assert_eq!(nbytes, 10);
+	                dev.reset_recv_buffer();
+	                dev.request_read_bytes(19).unwrap();
+	            }	            
+	            Event::BytesRead(nbytes) if self.hello_received => {
+	                assert_eq!(nbytes, 19);
+	                assert_eq!(dev.recv_bytes(), b"Goodbye FlightVars\n");
+	                dev.close().unwrap();
+	            }
+	            _ => unreachable!(),
+	        }
+	    }
 	}
 }

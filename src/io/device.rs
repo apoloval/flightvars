@@ -20,7 +20,6 @@ use super::ffi::*;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Event {
-    None,
     BytesRead(usize),
     BytesWritten(usize),
 }
@@ -82,12 +81,19 @@ impl Device {
       }  
     }
     
-    pub fn close(self) -> io::Result<()> {
+    pub fn close(&mut self) -> io::Result<()> {
         let rc = unsafe { 
             CloseHandle(self.handle) 
         };
         if rc == 0 { Err(io::Error::last_os_error()) } 
-        else { Ok(()) }
+        else {
+            self.handle = INVALID_HANDLE_VALUE; 
+            Ok(()) 
+        }            
+    }
+    
+    pub fn is_closed(&self) -> bool {
+        self.handle == INVALID_HANDLE_VALUE
     }
     
     pub fn reset_recv_buffer(&mut self) {
@@ -141,21 +147,21 @@ impl Device {
         }
     }
     
-    pub fn process_event(&mut self) -> Event {
+    pub fn process_event(&mut self) -> Option<Event> {
         if self.read_event_ready() {
-        	Event::BytesRead(self.process_read_event())
+        	Some(Event::BytesRead(self.process_read_event()))
         } else if self.write_event_ready() {
-            Event::BytesWritten(self.process_write_event())
+            Some(Event::BytesWritten(self.process_write_event()))
         } else {
-            Event::None
+            None
         }
     }
     
-    fn read_event_ready(&self) -> bool  {
+    pub fn read_event_ready(&self) -> bool  {
         self.read_pending && self.read_control_block.overlapped.Internal != STATUS_PENDING
     }
     
-    fn write_event_ready(&self) -> bool  {
+    pub fn write_event_ready(&self) -> bool  {
         self.write_control_blocks
         	.first()
         	.iter()
