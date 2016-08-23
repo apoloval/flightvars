@@ -6,7 +6,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::boxed::Box;
 use std::collections::HashMap;
 use std::io;
 use std::time::Duration;
@@ -18,7 +17,6 @@ use super::ffi::*;
 
 pub struct CompletionPort<H: DeviceHandler> {
     handle: HANDLE,
-    devices: HashMap<DeviceId, Device>,
     handlers: HashMap<DeviceId, H>,
 }
 
@@ -33,14 +31,13 @@ impl<H: DeviceHandler> CompletionPort<H> {
         };
         Ok(CompletionPort {
             handle: handle,
-            devices: HashMap::new(),
             handlers: HashMap::new(),
         })
     }
         
-    pub fn attach(&mut self, dev: Device, handler: H) -> io::Result<DeviceId> {
-        let handle = dev.handle();
-        let id = dev.id();
+    pub fn attach(&mut self, mut handler: H) -> io::Result<DeviceId> {
+        let handle = handler.device().handle();
+        let id = handler.device().id();
         unsafe {            
             let rc = CreateIoCompletionPort(
                 handle,
@@ -51,17 +48,9 @@ impl<H: DeviceHandler> CompletionPort<H> {
                 return Err(io::Error::last_os_error());
             }
         }
-        self.devices.insert(id, dev);
+        handler.process_event(Event::Ready);
         self.handlers.insert(id, handler);
         Ok(id)
-    }
-    
-    pub fn detach(&mut self, id: DeviceId) -> Option<Device> {
-        self.devices.remove(&id)
-    }
-    
-    pub fn device(&mut self, id: DeviceId) -> Option<&mut Device> {
-        self.devices.get_mut(&id)
     }
     
     pub fn process_event(&mut self, timeout: &Duration) -> io::Result<DeviceId> {
@@ -84,15 +73,13 @@ impl<H: DeviceHandler> CompletionPort<H> {
         };
         let id = key as DeviceId;
         let was_closed = {
-            let dev = self.devices.get_mut(&id).unwrap();
             let handler = self.handlers.get_mut(&id).unwrap();
-            if let Some(event) = dev.process_event() {
-            	handler.process_event(dev, event);        
+            if let Some(event) = handler.device().process_event() {
+            	handler.process_event(event);        
             }
-          	dev.is_closed()  
+          	handler.device().is_closed()  
         };
         if was_closed {
-            self.devices.remove(&id);
             self.handlers.remove(&id);
         }
         Ok(id)
@@ -118,35 +105,18 @@ mod test {
 	    with_file_content("should_read_device", "This is a file with some content", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
 	        let file = Device::open(path).unwrap();
-	        let id = iocp.attach(file, |dev: &mut Device, _| {
-                assert_eq!(dev.recv_bytes(), b"This is a file with some content");
-	        }).unwrap();
-		    iocp.device(id).unwrap().request_read().expect("request read");
-		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-		    assert_eq!(dev, id);
-		    iocp.device(id).unwrap().process_event();
+	        iocp.attach(FileReader::new(file)).unwrap();
+		    iocp.process_event(&Duration::from_millis(100)).unwrap();
         });
 	}
 	
 	#[test]
 	fn should_write_device() {
 	    with_file_content("should_write_device", "", |path| {
-        	{
-    		    let mut iocp = CompletionPort::new().unwrap();
-    	        let file = Device::open(path).unwrap();
-    	        let id = iocp.attach(file, |_: &mut Device, event| {
-	                if let Event::BytesWritten(n) = event {
-		                assert_eq!(n, 32);	                    
-	                } else {
-	                    panic!("invalid written bytes count");
-	                }
-    	        }).unwrap();
-    		    iocp.device(id).unwrap().request_write(b"This is a file with some content").unwrap();
-    		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-    		    assert_eq!(dev, id);    		    
-    		    iocp.device(id).unwrap().process_event();
-    		    iocp.detach(id).unwrap().close().unwrap();
-	    	}
+		    let mut iocp = CompletionPort::new().unwrap();
+	        let file = Device::open(path).unwrap();
+	        iocp.attach(FileWriter::new(file)).unwrap();
+		    iocp.process_event(&Duration::from_millis(100)).unwrap();
 		    assert_file_contains(path, "This is a file with some content");		    
         });
 	}
@@ -154,30 +124,11 @@ mod test {
 	#[test]
 	fn should_write_device_concurrently() {
 	    with_file_content("should_write_device_concurrently", "", |path| {
-	        let mut bytes_written = 0;
-	    	{
-    		    let mut iocp = CompletionPort::new().unwrap();
-    	        let file = Device::open(path).unwrap();
-    	        let id = iocp.attach(file, |_: &mut Device, event| {
-	                if let Event::BytesWritten(n) = event {
-		                bytes_written += n;	                    
-	                } else {
-	                    panic!("invalid written bytes count");
-	                }
-    	        }).unwrap();
-    		    iocp.device(id).unwrap().request_write(b"This is a file with some content").expect("request write");
-    		    iocp.device(id).unwrap().request_write(b"This is Sparta").expect("request write");
-
-    		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-    		    assert_eq!(dev, id);
-    		    iocp.device(id).unwrap().process_event();
-
-    		    let dev = iocp.process_event(&Duration::from_millis(100)).unwrap();
-    		    assert_eq!(dev, id);
-    		    iocp.device(id).unwrap().process_event();
-    		    iocp.detach(id).unwrap().close().unwrap();
-	    	} 
-        	assert_eq!(bytes_written, 46);
+		    let mut iocp = CompletionPort::new().unwrap();
+	        let file = Device::open(path).unwrap();
+	        iocp.attach(ParallelFileWriter::new(file)).unwrap();
+		    iocp.process_event(&Duration::from_millis(100)).unwrap();
+		    iocp.process_event(&Duration::from_millis(100)).unwrap();
 		    // Since no offset is given when writing, both writes will start at the begining
 		    // of the file. This is pointless for serial and network ports. 
 		    assert_file_contains(path, "This is Sparta with some content");
@@ -199,5 +150,91 @@ mod test {
 	    let mut line = String::new();
 	    file.read_to_string(&mut line).expect("read file");
 	    assert_eq!(line, content);
-	}	
+	}
+	
+	struct FileReader { dev: Device }
+	
+	impl FileReader {
+	    fn new(dev: Device) -> FileReader {
+	        FileReader { dev: dev }
+	    }
+	}
+	
+	impl DeviceHandler for FileReader {
+	    
+	    fn device(&mut self) -> &mut Device { &mut self.dev }
+	        
+    	fn process_event(&mut self, event: Event) {
+    	    match event {
+    	        Event::Ready => { 
+    	            self.dev.request_read().unwrap(); 
+    	        }
+    	        Event::BytesRead(n) => {
+    	            assert_eq!(n, 32);
+    	            assert_eq!(self.dev.recv_bytes(), b"This is a file with some content");
+    	            self.dev.close().unwrap();
+    	        }
+    	        _ => {},
+    	    }
+    	}
+	}
+	
+	
+	struct FileWriter { dev: Device }
+	
+	impl FileWriter {
+	    fn new(dev: Device) -> FileWriter {
+	        FileWriter { dev: dev }
+	    }
+	}
+	
+	impl DeviceHandler for FileWriter {
+	    
+	    fn device(&mut self) -> &mut Device { &mut self.dev }
+	        
+    	fn process_event(&mut self, event: Event) {
+    	    match event {
+    	        Event::Ready => { 
+    	            self.dev.request_write(b"This is a file with some content").unwrap(); 
+    	        }
+    	        Event::BytesWritten(n) => {
+    	            assert_eq!(n, 32);
+    	            self.dev.close().unwrap();
+    	        }
+    	        _ => {},
+    	    }
+    	}
+	}
+	
+	
+	struct ParallelFileWriter { dev: Device, written: usize }
+	
+	impl ParallelFileWriter {
+	    fn new(dev: Device) -> ParallelFileWriter {
+	        ParallelFileWriter { dev: dev, written: 0 }
+	    }
+	}
+	
+	impl DeviceHandler for ParallelFileWriter {
+	    
+	    fn device(&mut self) -> &mut Device { &mut self.dev }
+	        
+    	fn process_event(&mut self, event: Event) {
+    	    match event {
+    	        Event::Ready => { 
+    	            self.dev.request_write(b"This is a file with some content").unwrap(); 
+    	            self.dev.request_write(b"This is Sparta").unwrap(); 
+    	        }
+    	        Event::BytesWritten(n) if self.written == 0 => {
+    	            assert_eq!(n, 32);
+    	            self.written += n;
+    	        }
+    	        Event::BytesWritten(n) if self.written > 0 => {
+    	            assert_eq!(n, 14);
+    	            self.dev.close().unwrap();
+    	        }
+    	        _ => {},
+    	    }
+    	}
+	}
 }

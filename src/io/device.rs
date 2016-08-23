@@ -20,6 +20,7 @@ use super::ffi::*;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Event {
+    Ready,
     BytesRead(usize),
     BytesWritten(usize),
 }
@@ -183,12 +184,7 @@ impl Device {
     }
 }
 
-pub trait DeviceHandler {
-    fn process_event(&mut self, device: &mut Device, event: Event);    
-}
-
-impl <F: FnMut(&mut Device, Event)> DeviceHandler for F {
-    fn process_event(&mut self, device: &mut Device, event: Event) {
-        self(device, event);
-    }
+pub trait DeviceHandler {    
+    fn device(&mut self) -> &mut Device;    
+    fn process_event(&mut self, event: Event);    
 }

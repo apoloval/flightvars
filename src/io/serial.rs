@@ -146,54 +146,56 @@ mod test {
 	#[test]
 	#[ignore]
 	fn should_read_and_write() {
-	    let mut handler = EchoHandler::new();
-	    {
-    	    let mut iocp = CompletionPort::new().unwrap();	    
-    		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
-    		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
-    		let id = iocp.attach(port.as_device(), |dev: &mut Device, event| 
-    		    handler.process_event(dev, event)
-    		).unwrap();
-    		
-    		// Wait for Arduino to completely boot
-    		thread::sleep(time::Duration::from_millis(2000));
-    		
-	        iocp.device(id).unwrap().request_read_bytes(6).unwrap();
-    		loop {
-    		    if iocp.process_event(&time::Duration::from_millis(100)).is_err() {
-    		        break
-    		    }
-    		}
-	    }
+	    let mut iocp = CompletionPort::new().unwrap();	    
+		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
+		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
+		iocp.attach(EchoHandler::new(port.as_device())).unwrap();
+		
+		// Wait for Arduino to completely boot
+		thread::sleep(time::Duration::from_millis(2000));
+		
+		loop {
+		    if iocp.process_event(&time::Duration::from_millis(100)).is_err() {
+		        break
+		    }
+		}
 	}
 	
 	struct EchoHandler {
+	    dev: Device,
 	    hello_received: bool,
 	}
 	
 	impl EchoHandler {
-	    
-	    fn new() -> EchoHandler {
-	        EchoHandler { hello_received: false }
+	    fn new(dev: Device) -> EchoHandler {
+	        EchoHandler { dev: dev, hello_received: false }
 	    }
+	}
+	
+	impl DeviceHandler for EchoHandler {
+
+		fn device(&mut self) -> &mut Device { &mut self.dev }
 	    
-	    fn process_event(&mut self, dev: &mut Device, event: Event) {
+	    fn process_event(&mut self, event: Event) {
 	        match event {
+	            Event::Ready => {
+	                self.dev.request_read_bytes(6).unwrap();
+	            }
 	            Event::BytesRead(nbytes) if !self.hello_received => {
 	                assert_eq!(nbytes, 6);
-	                assert_eq!(dev.recv_bytes(), b"Hello\n");
-	                dev.request_write(b"FlightVars").unwrap();
+	                assert_eq!(self.dev.recv_bytes(), b"Hello\n");
+	                self.dev.request_write(b"FlightVars").unwrap();
 	                self.hello_received = true;
 	            }
 	            Event::BytesWritten(nbytes) => {
 	                assert_eq!(nbytes, 10);
-	                dev.reset_recv_buffer();
-	                dev.request_read_bytes(19).unwrap();
+	                self.dev.reset_recv_buffer();
+	                self.dev.request_read_bytes(19).unwrap();
 	            }	            
 	            Event::BytesRead(nbytes) if self.hello_received => {
 	                assert_eq!(nbytes, 19);
-	                assert_eq!(dev.recv_bytes(), b"Goodbye FlightVars\n");
-	                dev.close().unwrap();
+	                assert_eq!(self.dev.recv_bytes(), b"Goodbye FlightVars\n");
+	                self.dev.close().unwrap();
 	            }
 	            _ => unreachable!(),
 	        }
