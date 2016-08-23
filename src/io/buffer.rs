@@ -28,14 +28,14 @@ impl Buffer {
 
     pub fn as_mut_ptr(&mut self) -> *mut u8 { self.data.as_mut_ptr() }
     
-    pub fn clear(&mut self) {
-        self.data.clear()
-    }
-    
     pub fn extend(&mut self, inc: usize) {
         let new_len = self.data.len() + inc;
         assert!(new_len < self.data.capacity());
         unsafe { self.data.set_len(new_len) }; 
+    }
+    
+    pub fn consume(&mut self, nbytes: usize) {
+        self.data.drain(0..nbytes);
     }
 }
 
@@ -67,6 +67,14 @@ mod test {
         assert_eq!(buf.len(), 4);
         buf.extend(2);
         assert_eq!(buf.len(), 6);
+    }
+    
+    #[test]
+    fn should_consume() {
+        let mut buf = Buffer::with_capacity(16);
+        buf.extend(6);
+        buf.consume(2);
+        assert_eq!(buf.len(), 4);
     }
     
     #[test]

@@ -97,8 +97,8 @@ impl Device {
         self.handle == INVALID_HANDLE_VALUE
     }
     
-    pub fn reset_recv_buffer(&mut self) {
-        self.read_control_block.buffer.clear()
+    pub fn consume_recv_buffer(&mut self, nbytes: usize) {
+        self.read_control_block.buffer.consume(nbytes)
     }
     
     pub fn recv_bytes(&self) -> &[u8] {

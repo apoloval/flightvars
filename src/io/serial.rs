@@ -184,12 +184,12 @@ mod test {
 	            Event::BytesRead(nbytes) if !self.hello_received => {
 	                assert_eq!(nbytes, 6);
 	                assert_eq!(self.dev.recv_bytes(), b"Hello\n");
+	                self.dev.consume_recv_buffer(6);
 	                self.dev.request_write(b"FlightVars").unwrap();
 	                self.hello_received = true;
 	            }
 	            Event::BytesWritten(nbytes) => {
 	                assert_eq!(nbytes, 10);
-	                self.dev.reset_recv_buffer();
 	                self.dev.request_read_bytes(19).unwrap();
 	            }	            
 	            Event::BytesRead(nbytes) if self.hello_received => {
