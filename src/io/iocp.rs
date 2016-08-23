@@ -48,7 +48,7 @@ impl<H: DeviceHandler> CompletionPort<H> {
                 return Err(io::Error::last_os_error());
             }
         }
-        handler.process_event(Event::Ready);
+        try!(handler.process_event(Event::Ready));
         self.handlers.insert(id, handler);
         Ok(id)
     }
@@ -75,7 +75,9 @@ impl<H: DeviceHandler> CompletionPort<H> {
         let was_closed = {
             let handler = self.handlers.get_mut(&id).unwrap();
             if let Some(event) = handler.device().process_event() {
-            	handler.process_event(event);        
+            	if let Err(_) = handler.process_event(event) {
+            	    try!(handler.device().close());
+            	}        
             }
           	handler.device().is_closed()  
         };
@@ -90,6 +92,7 @@ impl<H: DeviceHandler> CompletionPort<H> {
 mod test {
     
     use std::fs::File;
+    use std::io;
 	use std::io::{Read, Write};
 	use std::path::Path;
 	use std::time::Duration;
@@ -164,17 +167,15 @@ mod test {
 	    
 	    fn device(&mut self) -> &mut Device { &mut self.dev }
 	        
-    	fn process_event(&mut self, event: Event) {
+    	fn process_event(&mut self, event: Event) -> io::Result<()> {
     	    match event {
-    	        Event::Ready => { 
-    	            self.dev.request_read().unwrap(); 
-    	        }
+    	        Event::Ready => self.dev.request_read(), 
     	        Event::BytesRead(n) => {
     	            assert_eq!(n, 32);
     	            assert_eq!(self.dev.recv_bytes(), b"This is a file with some content");
-    	            self.dev.close().unwrap();
+    	            self.dev.close()
     	        }
-    	        _ => {},
+    	        _ => Ok(()),
     	    }
     	}
 	}
@@ -192,16 +193,14 @@ mod test {
 	    
 	    fn device(&mut self) -> &mut Device { &mut self.dev }
 	        
-    	fn process_event(&mut self, event: Event) {
+    	fn process_event(&mut self, event: Event) -> io::Result<()> {
     	    match event {
-    	        Event::Ready => { 
-    	            self.dev.request_write(b"This is a file with some content").unwrap(); 
-    	        }
+    	        Event::Ready => self.dev.request_write(b"This is a file with some content"), 
     	        Event::BytesWritten(n) => {
     	            assert_eq!(n, 32);
-    	            self.dev.close().unwrap();
+    	            self.dev.close()
     	        }
-    	        _ => {},
+    	        _ => Ok(()),
     	    }
     	}
 	}
@@ -219,21 +218,22 @@ mod test {
 	    
 	    fn device(&mut self) -> &mut Device { &mut self.dev }
 	        
-    	fn process_event(&mut self, event: Event) {
+    	fn process_event(&mut self, event: Event) -> io::Result<()> {
     	    match event {
     	        Event::Ready => { 
-    	            self.dev.request_write(b"This is a file with some content").unwrap(); 
-    	            self.dev.request_write(b"This is Sparta").unwrap(); 
+    	            try!(self.dev.request_write(b"This is a file with some content")); 
+    	            self.dev.request_write(b"This is Sparta")
     	        }
     	        Event::BytesWritten(n) if self.written == 0 => {
     	            assert_eq!(n, 32);
     	            self.written += n;
+    	            Ok(())
     	        }
     	        Event::BytesWritten(n) if self.written > 0 => {
     	            assert_eq!(n, 14);
-    	            self.dev.close().unwrap();
+    	            self.dev.close()
     	        }
-    	        _ => {},
+    	        _ => Ok(()),
     	    }
     	}
 	}

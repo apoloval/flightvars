@@ -114,6 +114,7 @@ impl DerefMut for Serial {
 #[cfg(test)]
 mod test {
 
+	use std::io;
 	use std::{thread, time};
 
 	use io::device::*;
@@ -176,26 +177,24 @@ mod test {
 
 		fn device(&mut self) -> &mut Device { &mut self.dev }
 	    
-	    fn process_event(&mut self, event: Event) {
+	    fn process_event(&mut self, event: Event) -> io::Result<()> {
 	        match event {
-	            Event::Ready => {
-	                self.dev.request_read_bytes(6).unwrap();
-	            }
+	            Event::Ready => self.dev.request_read_bytes(6),
 	            Event::BytesRead(nbytes) if !self.hello_received => {
 	                assert_eq!(nbytes, 6);
 	                assert_eq!(self.dev.recv_bytes(), b"Hello\n");
 	                self.dev.consume_recv_buffer(6);
-	                self.dev.request_write(b"FlightVars").unwrap();
 	                self.hello_received = true;
+	                self.dev.request_write(b"FlightVars")
 	            }
 	            Event::BytesWritten(nbytes) => {
 	                assert_eq!(nbytes, 10);
-	                self.dev.request_read_bytes(19).unwrap();
+	                self.dev.request_read_bytes(19)
 	            }	            
 	            Event::BytesRead(nbytes) if self.hello_received => {
 	                assert_eq!(nbytes, 19);
 	                assert_eq!(self.dev.recv_bytes(), b"Goodbye FlightVars\n");
-	                self.dev.close().unwrap();
+	                self.dev.close()
 	            }
 	            _ => unreachable!(),
 	        }

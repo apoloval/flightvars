@@ -45,6 +45,7 @@ pub struct DomainDispatcher {
 }
 
 impl DomainDispatcher {
+    
     pub fn new() -> io::Result<DomainDispatcher> {
         let mut dispatcher = DomainDispatcher { domains: HashMap::new() };
         dispatcher.add("fsuipc", try!(fsuipc::Fsuipc::new()));
@@ -52,13 +53,20 @@ impl DomainDispatcher {
         Ok(dispatcher)
     }
     
-    pub fn add<D: Domain + 'static>(&mut self, name: &str, d: D) {
+    fn add<D: Domain + 'static>(&mut self, name: &str, d: D) {
         self.domains.insert(name.to_string(), Rc::new(RefCell::new(d)));
     }
     
-    pub fn with_domain<F: FnOnce(&mut Domain)>(&mut self, name: &str, f: F) {
-        if let Some(domain) = self.domains.get(name) {
-        	f(&mut *domain.borrow_mut());
+    pub fn with_domain<F>(&mut self, name: &str, f: F) -> io::Result<()> 
+    where F: FnOnce(&mut Domain) -> io::Result<()> {
+        match self.domains.get(name) {
+            Some(domain) => f(&mut *domain.borrow_mut()),
+            None => {
+                let error = io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("no such domain '{}'", name));
+                Err(error)
+            }
         }
     }
 }

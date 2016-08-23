@@ -28,6 +28,7 @@ pub struct Oacsp {
 }
 
 impl Oacsp {
+    
     pub fn new(dev: Device, domains: DomainDispatcher) -> Oacsp {
         Oacsp { dev: dev, domains: domains, client_id: None }
     }
@@ -52,27 +53,27 @@ impl Oacsp {
 				Err(io::Error::new(io::ErrorKind::InvalidData, "begin message already received"))                    
             }
             (RawInputMessage::WriteLvar { lvar, value }, true) => {
-                self.domains.with_domain("lvar", |dom| {
-					dom.write(&Var::Named(lvar), &value).unwrap(); // TODO: manage errors                        
-                });
+                try!(self.domains.with_domain("lvar", |dom| {
+					dom.write(&Var::Named(lvar), &value)                        
+                }));
                 Ok(nbytes)
             }
             (RawInputMessage::WriteOffset { offset, value }, true) => {
-                self.domains.with_domain("fsuipc", |dom| {
-					dom.write(&Var::Offset(offset), &value).unwrap(); // TODO: manage errors                        
-                });
+                try!(self.domains.with_domain("fsuipc", |dom| {
+					dom.write(&Var::Offset(offset), &value)                        
+                }));
                 Ok(nbytes)
             }
             (RawInputMessage::ObserveLvar { lvar }, true) => {
-                self.domains.with_domain("lvar", |dom| {
-					dom.subscribe(dev_id, &Var::Named(lvar)).unwrap(); // TODO: manage errors                        
-                });
+                try!(self.domains.with_domain("lvar", |dom| {
+					dom.subscribe(dev_id, &Var::Named(lvar))                        
+                }));
                 Ok(nbytes)
             }
             (RawInputMessage::ObserveOffset { offset }, true) => {
-                self.domains.with_domain("fsuipc", |dom| {
-					dom.subscribe(dev_id, &Var::Offset(offset)).unwrap(); // TODO: manage errors                        
-                });
+                try!(self.domains.with_domain("fsuipc", |dom| {
+					dom.subscribe(dev_id, &Var::Offset(offset))                        
+                }));
                 Ok(nbytes)
             }
             (_, false) =>  {
@@ -88,19 +89,17 @@ impl Oacsp {
 impl DeviceHandler for Oacsp {
     fn device(&mut self) -> &mut Device { &mut self.dev }
     
-    fn process_event(&mut self, event: Event) {
+    fn process_event(&mut self, event: Event) -> io::Result<()> {
         match event {
-            Event::Ready => {
-                self.dev.request_read().unwrap(); // TODO: manage errors
-            }
+            Event::Ready => self.dev.request_read(),
             Event::BytesRead(_) => {
                 if self.line_is_ready() {
-                    let nread = self.process_input().unwrap(); // TODO: manage errors
+                    let nread = try!(self.process_input());
                     self.dev.consume_recv_buffer(nread);
                 }
-                self.dev.request_read().unwrap(); // TODO: manage errors
+                self.dev.request_read()
             }
-            Event::BytesWritten(_) => {} // ignored
+            Event::BytesWritten(_) => Ok(()),
         }
     }    
 }

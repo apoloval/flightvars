@@ -186,5 +186,5 @@ impl Device {
 
 pub trait DeviceHandler {    
     fn device(&mut self) -> &mut Device;    
-    fn process_event(&mut self, event: Event);    
+    fn process_event(&mut self, event: Event) -> io::Result<()>;    
 }
