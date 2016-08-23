@@ -6,7 +6,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io;
+use std::rc::Rc;
 
 use types::*;
 
@@ -34,4 +37,28 @@ pub trait Domain {
     fn subscribe(&mut self, device: DeviceId, variable: &Var) -> io::Result<()>;
     fn unsubscribe_all(&mut self, device: DeviceId) -> io::Result<()>;
     fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()>;
+}
+
+#[derive(Clone)]
+pub struct DomainDispatcher {
+    domains: HashMap<String, Rc<RefCell<Domain>>>,
+}
+
+impl DomainDispatcher {
+    pub fn new() -> io::Result<DomainDispatcher> {
+        let mut dispatcher = DomainDispatcher { domains: HashMap::new() };
+        dispatcher.add("fsuipc", try!(fsuipc::Fsuipc::new()));
+        dispatcher.add("lvar", lvar::LVar::new());
+        Ok(dispatcher)
+    }
+    
+    pub fn add<D: Domain + 'static>(&mut self, name: &str, d: D) {
+        self.domains.insert(name.to_string(), Rc::new(RefCell::new(d)));
+    }
+    
+    pub fn with_domain<F: FnOnce(&mut Domain)>(&mut self, name: &str, f: F) {
+        if let Some(domain) = self.domains.get(name) {
+        	f(&mut *domain.borrow_mut());
+        }
+    }
 }
