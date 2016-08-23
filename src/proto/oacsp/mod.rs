@@ -7,9 +7,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::io;
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 use std::str::FromStr;
 
+use domain::DomainDispatcher;
+use io::*;
 use proto::*;
 use types::*;
 
@@ -20,194 +22,106 @@ use self::input::RawInputMessage;
 use self::output::RawOutputMessage;
 
 pub struct Oacsp {
+    dev: Device,
+    domains: DomainDispatcher,
     client_id: Option<String>
 }
 
 impl Oacsp {
-    pub fn new() -> Oacsp {
-        Oacsp { client_id: None }
+    pub fn new(dev: Device, domains: DomainDispatcher) -> Oacsp {
+        Oacsp { dev: dev, domains: domains, client_id: None }
     }
-}
-
-impl Protocol for Oacsp {
     
-    fn decode<R: io::Read>(&mut self, input: R) -> io::Result<Decoded> {
-        let mut buf = io::BufReader::new(input);
+    fn line_is_ready(&self) -> bool {
+        self.dev.recv_bytes().contains(&b'\n')
+    }
+
+    fn process_input(&mut self) -> io::Result<usize> {
+        assert!(self.line_is_ready());
+        let dev_id = self.dev.id();
+        let mut buf = io::BufReader::new(self.dev.recv_bytes());
         let mut line = String::new();
         let nbytes = try!(buf.read_line(&mut line)) + 1; // end-of-line byte counts
         let begin_received = self.client_id.is_some();
         match (try!(RawInputMessage::from_str(&line)), begin_received) {
             (RawInputMessage::Begin { version: _, client_id }, false) => {
             	self.client_id = Some(client_id);
-            	Ok(Decoded::ControlMessage(nbytes))
+            	Ok(nbytes)
             },
             (RawInputMessage::Begin { version: _, client_id: _ }, true) => {
 				Err(io::Error::new(io::ErrorKind::InvalidData, "begin message already received"))                    
             }
             (RawInputMessage::WriteLvar { lvar, value }, true) => {
-                let msg = InputMessage::write("lvar", Var::Named(lvar), value);                
-                Ok(Decoded::InputMessage(nbytes, msg))
+                self.domains.with_domain("lvar", |dom| {
+					dom.write(&Var::Named(lvar), &value).unwrap(); // TODO: manage errors                        
+                });
+                Ok(nbytes)
             }
             (RawInputMessage::WriteOffset { offset, value }, true) => {
-                let msg = InputMessage::write("fsuipc", Var::Offset(offset), value);                
-                Ok(Decoded::InputMessage(nbytes, msg))
+                self.domains.with_domain("fsuipc", |dom| {
+					dom.write(&Var::Offset(offset), &value).unwrap(); // TODO: manage errors                        
+                });
+                Ok(nbytes)
             }
             (RawInputMessage::ObserveLvar { lvar }, true) => {
-                let msg = InputMessage::subscribe("lvar", Var::Named(lvar));                
-                Ok(Decoded::InputMessage(nbytes, msg))
+                self.domains.with_domain("lvar", |dom| {
+					dom.subscribe(dev_id, &Var::Named(lvar)).unwrap(); // TODO: manage errors                        
+                });
+                Ok(nbytes)
             }
             (RawInputMessage::ObserveOffset { offset }, true) => {
-                let msg = InputMessage::subscribe("fsuipc", Var::Offset(offset));                
-                Ok(Decoded::InputMessage(nbytes, msg))
+                self.domains.with_domain("fsuipc", |dom| {
+					dom.subscribe(dev_id, &Var::Offset(offset)).unwrap(); // TODO: manage errors                        
+                });
+                Ok(nbytes)
             }
             (_, false) =>  {
-				Err(io::Error::new(
-				        io::ErrorKind::InvalidData, 
-				        "unexpected message while waiting for begin"))                    
+                let error = io::Error::new(
+                    io::ErrorKind::InvalidData, 
+                    "unexpected message while waiting for begin");
+				Err(error)                    
             }
         }                
     }
+}
+
+impl DeviceHandler for Oacsp {
+    fn device(&mut self) -> &mut Device { &mut self.dev }
     
-    fn encode<W: io::Write>(&mut self, message: OutputMessage, output: &mut W) -> io::Result<()> {
-        match message {
-            OutputMessage::Update { 
-                    ref domain, 
-                    variable: Var::Offset(offset), 
-                    value } if domain == "fsuipc" => {
-                let raw = RawOutputMessage::EventOffset { offset: offset, value: value };
-                try!(write!(output, "{}\n", raw));
-                Ok(())
+    fn process_event(&mut self, event: Event) {
+        match event {
+            Event::Ready => {
+                self.dev.request_read().unwrap(); // TODO: manage errors
             }
-            OutputMessage::Update { 
-                    ref domain, 
-                    variable: Var::Named(ref lvar), 
-                    value } if domain == "lvar" => {
-                let raw = RawOutputMessage::EventLvar { lvar: lvar.clone(), value: value };
-                try!(write!(output, "{}\n", raw));
-                Ok(())
+            Event::BytesRead(_) => {
+                if self.line_is_ready() {
+                    let nread = self.process_input().unwrap(); // TODO: manage errors
+                    self.dev.consume_recv_buffer(nread);
+                }
+                self.dev.request_read().unwrap(); // TODO: manage errors
             }
+            Event::BytesWritten(_) => {} // ignored
+        }
+    }    
+}
+
+impl Protocol for Oacsp {
+        
+    fn send_update(&mut self, domain: &str, variable: Var, value: Value) -> io::Result<()> {
+        let raw = try!(match variable {
+            Var::Offset(offset) if domain == "fsuipc" =>
+                Ok(RawOutputMessage::EventOffset { offset: offset, value: value }),
+            Var::Named(ref lvar) if domain == "lvar" =>
+                Ok(RawOutputMessage::EventLvar { lvar: lvar.clone(), value: value }),
             _ => {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("cannot encode message {:?}", message)))
+                    format!("cannot encode a message for domain '{}', var '{:?}'", 
+                        domain, variable)))
             }
-        }        
-    }
-    
-}
-
-#[cfg(test)]
-mod test {
-    
-    use std::io;
-    
-    use proto::*;
-    use types::*;
-    
-    use super::*;
-    
-    #[test]
-    fn should_decode_begin() {
-        let mut oacsp = Oacsp::new();
-        let decoded = oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap();
-        assert_eq!(decoded, Decoded::ControlMessage(15));
-    }
-    
-    #[test]
-    fn should_fail_decode_repeated_begin() {
-        let mut oacsp = Oacsp::new();
-        oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap();
-        let error = oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }
-        
-    #[test]
-    fn should_decode_write_lvar() {
-        let mut oacsp = Oacsp::new();
-        oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap();
-        let decoded = oacsp.decode(b"WRITE_LVAR foobar 42" as &[u8]).unwrap();
-        let expected = InputMessage::write("lvar", Var::named("foobar"), Value::Number(42));
-        assert_eq!(decoded, Decoded::InputMessage(21, expected));
-    }
-        
-    #[test]
-    fn should_fail_decode_write_lvar_before_begin() {
-        let mut oacsp = Oacsp::new();
-        let error = oacsp.decode(b"WRITE_LVAR foobar 42" as &[u8]).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }
-        
-    #[test]
-    fn should_decode_write_offset() {
-        let mut oacsp = Oacsp::new();
-        oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap();
-        let decoded = oacsp.decode(b"WRITE_OFFSET 1234+2 42" as &[u8]).unwrap();
-        let expected = InputMessage::write("fsuipc", Var::offset(0x1234, 2).unwrap(), Value::Number(42));
-        assert_eq!(decoded, Decoded::InputMessage(23, expected));
-    }
-        
-    #[test]
-    fn should_fail_decode_write_offset_before_begin() {
-        let mut oacsp = Oacsp::new();
-        let error = oacsp.decode(b"WRITE_OFFSET 1234+2 42" as &[u8]).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }    
-        
-    #[test]
-    fn should_decode_observe_lvar() {
-        let mut oacsp = Oacsp::new();
-        oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap();
-        let decoded = oacsp.decode(b"OBS_LVAR foobar" as &[u8]).unwrap();
-        let expected = InputMessage::subscribe("lvar", Var::named("foobar"));
-        assert_eq!(decoded, Decoded::InputMessage(16, expected));
-    }
-        
-    #[test]
-    fn should_fail_decode_observe_lvar_before_begin() {
-        let mut oacsp = Oacsp::new();
-        let error = oacsp.decode(b"OBS_LVAR foobar" as &[u8]).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }    
-        
-    #[test]
-    fn should_decode_observe_offset() {
-        let mut oacsp = Oacsp::new();
-        oacsp.decode(b"BEGIN 1 foobar" as &[u8]).unwrap();
-        let decoded = oacsp.decode(b"OBS_OFFSET 1234+2" as &[u8]).unwrap();
-        let expected = InputMessage::subscribe("fsuipc", Var::offset(0x1234, 2).unwrap());
-        assert_eq!(decoded, Decoded::InputMessage(18, expected));
-    }
-        
-    #[test]
-    fn should_fail_decode_observe_offset_before_begin() {
-        let mut oacsp = Oacsp::new();
-        let error = oacsp.decode(b"OBS_OFFSET 1234+2" as &[u8]).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }    
-
-    #[test]
-    fn should_encode_update_offset() {
-        let mut oacsp = Oacsp::new();
+        });        
         let mut buf = Vec::new();
-        let msg = OutputMessage::Update {
-            domain: "fsuipc".to_string(),
-            variable: Var::offset(0x1234, 2).unwrap(),
-            value: Value::Number(42),
-        };
-        oacsp.encode(msg, &mut buf).unwrap();        
-        assert_eq!(&buf, b"EVENT_OFFSET 1234+2 42\n");
-    }        
-
-    #[test]
-    fn should_encode_update_lvar() {
-        let mut oacsp = Oacsp::new();
-        let mut buf = Vec::new();
-        let msg = OutputMessage::Update {
-            domain: "lvar".to_string(),
-            variable: Var::named("foobar"),
-            value: Value::Number(42),
-        };
-        oacsp.encode(msg, &mut buf).unwrap();        
-        assert_eq!(&buf, b"EVENT_LVAR foobar 42\n");
-    }        
+        try!(write!(&mut buf, "{}\n", raw));
+        self.dev.request_write(&buf)
+    }    
 }
