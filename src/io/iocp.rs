@@ -16,14 +16,14 @@ use types::*;
 use super::device::*;
 use super::ffi::*;
 
-pub struct CompletionPort<'a> {
+pub struct CompletionPort<H: DeviceHandler> {
     handle: HANDLE,
     devices: HashMap<DeviceId, Device>,
-    handlers: HashMap<DeviceId, Box<FnMut(&mut Device, Event) + 'a>>,
+    handlers: HashMap<DeviceId, H>,
 }
 
-impl<'a> CompletionPort<'a> {
-    pub fn new() -> io::Result<CompletionPort<'a>> {
+impl<H: DeviceHandler> CompletionPort<H> {
+    pub fn new() -> io::Result<CompletionPort<H>> {
         let handle = checked_handle! { not_null =>
             CreateIoCompletionPort(
                 INVALID_HANDLE_VALUE,
@@ -38,8 +38,7 @@ impl<'a> CompletionPort<'a> {
         })
     }
         
-    pub fn attach<F>(&mut self, dev: Device, handler: F) -> io::Result<DeviceId> 
-    where F: FnMut(&mut Device, Event) + 'a {
+    pub fn attach(&mut self, dev: Device, handler: H) -> io::Result<DeviceId> {
         let handle = dev.handle();
         let id = dev.id();
         unsafe {            
@@ -53,7 +52,7 @@ impl<'a> CompletionPort<'a> {
             }
         }
         self.devices.insert(id, dev);
-        self.handlers.insert(id, Box::new(handler));
+        self.handlers.insert(id, handler);
         Ok(id)
     }
     
@@ -88,7 +87,7 @@ impl<'a> CompletionPort<'a> {
             let dev = self.devices.get_mut(&id).unwrap();
             let handler = self.handlers.get_mut(&id).unwrap();
             if let Some(event) = dev.process_event() {
-            	handler(dev, event);        
+            	handler.process_event(dev, event);        
             }
           	dev.is_closed()  
         };
@@ -119,7 +118,7 @@ mod test {
 	    with_file_content("should_read_device", "This is a file with some content", |path| {
 		    let mut iocp = CompletionPort::new().unwrap();
 	        let file = Device::open(path).unwrap();
-	        let id = iocp.attach(file, |dev, _| {
+	        let id = iocp.attach(file, |dev: &mut Device, _| {
                 assert_eq!(dev.recv_bytes(), b"This is a file with some content");
 	        }).unwrap();
 		    iocp.device(id).unwrap().request_read().expect("request read");
@@ -135,7 +134,7 @@ mod test {
         	{
     		    let mut iocp = CompletionPort::new().unwrap();
     	        let file = Device::open(path).unwrap();
-    	        let id = iocp.attach(file, |_, event| {
+    	        let id = iocp.attach(file, |_: &mut Device, event| {
 	                if let Event::BytesWritten(n) = event {
 		                assert_eq!(n, 32);	                    
 	                } else {

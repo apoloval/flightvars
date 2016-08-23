@@ -182,3 +182,13 @@ impl Device {
         cb.overlapped.InternalHigh as usize
     }
 }
+
+pub trait DeviceHandler {
+    fn process_event(&mut self, device: &mut Device, event: Event);    
+}
+
+impl <F: FnMut(&mut Device, Event)> DeviceHandler for F {
+    fn process_event(&mut self, device: &mut Device, event: Event) {
+        self(device, event);
+    }
+}
