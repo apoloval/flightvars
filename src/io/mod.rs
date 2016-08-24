@@ -15,3 +15,4 @@ mod iocp;
 mod serial;
 
 pub use self::device::*;
+pub use self::iocp::*;

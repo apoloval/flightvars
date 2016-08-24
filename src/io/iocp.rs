@@ -21,6 +21,7 @@ pub struct CompletionPort<H: DeviceHandler> {
 }
 
 impl<H: DeviceHandler> CompletionPort<H> {
+    
     pub fn new() -> io::Result<CompletionPort<H>> {
         let handle = checked_handle! { not_null =>
             CreateIoCompletionPort(

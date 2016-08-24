@@ -11,27 +11,19 @@ use std::ptr;
 
 use libc::malloc;
 
-use domain;
+use fv::*;
 use fsx::config;
 use fsx::logging;
-use port;
 
 const CONFIG_FILE: &'static str = "Modules/flightvars.conf";
 
 struct Module {
-    oacsp_tcp: Option<port::TcpPort>,
-    oacsp_serial: Option<port::SerialPort>,
-
-    fsuipc: Option<domain::WorkerStub>,
-    lvar: Option<domain::WorkerStub>,
+    flightvars: Option<FlightVarsHandler>,
 }
 
 impl Module {
     pub fn new() -> Self {
-        Module {
-            oacsp_tcp: None, oacsp_serial: None,
-            lvar: None, fsuipc: None,
-        }
+        Module { flightvars: None }
     }
 
     pub fn start(&mut self) {
@@ -45,25 +37,14 @@ impl Module {
     	logging::config_logging(settings.logging);
 
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
-        let fsuipc = domain::spawn_worker::<domain::fsuipc::Handler>();
-        let lvar = domain::spawn_worker::<domain::lvar::Handler>();
-        let router = domain::DomainRouter::new(
-            fsuipc.consumer(),
-            lvar.consumer());
-
-        self.fsuipc = Some(fsuipc);
-        self.lvar = Some(lvar);
-        self.oacsp_tcp = Some(port::TcpPort::tcp_oacsp("0.0.0.0:1801", router.clone()).unwrap());
-        self.oacsp_serial = Some(port::SerialPort::with_oacsp(
-                router, settings.oacsp_serial.ports).unwrap());
+        self.flightvars = Some(FlightVars::new().unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {
         info!("Stopping FlightVars module");
-        for port in self.oacsp_serial { port.shutdown(); }
-        for port in self.oacsp_tcp { port.shutdown(); }
-        for dom in self.fsuipc { dom.shutdown(); }
-        for dom in self.lvar { dom.shutdown(); }
+        for fv in self.flightvars {
+            fv.close();
+        }
         info!("FlightVars module stopped successfully");
     }
 }

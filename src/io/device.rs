@@ -188,3 +188,14 @@ pub trait DeviceHandler {
     fn device(&mut self) -> &mut Device;    
     fn process_event(&mut self, event: Event) -> io::Result<()>;    
 }
+
+#[allow(unconditional_recursion)]
+impl<H: DeviceHandler + ?Sized> DeviceHandler for Box<H> {
+    fn device(&mut self) -> &mut Device {
+        (*self).device()
+    }   
+     
+    fn process_event(&mut self, event: Event) -> io::Result<()> {
+        (*self).process_event(event)
+    }    
+}

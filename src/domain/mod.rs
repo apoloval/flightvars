@@ -13,8 +13,8 @@ use std::rc::Rc;
 
 use types::*;
 
-mod fsuipc;
-mod lvar;
+pub mod fsuipc;
+pub mod lvar;
 
 pub struct Event {
     pub device: DeviceId,
