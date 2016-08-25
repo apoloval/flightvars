@@ -18,14 +18,16 @@ pub mod lvar;
 
 pub struct Event {
     pub device: DeviceId,
+    pub domain: String,
     pub variable: Var,
     pub value: Value,
 }
 
 impl Event {
-    pub fn new(device: DeviceId, variable: Var, value: Value) -> Event {
+    pub fn new(device: DeviceId, domain: &str, variable: Var, value: Value) -> Event {
         Event {
             device: device,
+            domain: domain.to_string(),
             variable: variable,
             value: value,
         }
@@ -68,5 +70,13 @@ impl DomainDispatcher {
                 Err(error)
             }
         }
+    }
+
+    pub fn with_all_domains<F>(&mut self, mut f: F) -> io::Result<()> 
+    where F: FnMut(&mut Domain) -> io::Result<()> {
+        for domain in self.domains.values() {
+            try!(f(&mut *domain.borrow_mut()));
+        }
+        Ok(())
     }
 }

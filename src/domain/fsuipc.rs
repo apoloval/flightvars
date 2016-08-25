@@ -113,7 +113,7 @@ impl Subscription {
                 _ => unreachable!(),  
             };
             self.retain = Some(self.buffer);
-            let event = Event::new(self.device, Var::Offset(self.offset), value);
+            let event = Event::new(self.device, "fsuipc", Var::Offset(self.offset), value);
             events.push(event);
         }
     }

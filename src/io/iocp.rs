@@ -35,6 +35,10 @@ impl<H: DeviceHandler> CompletionPort<H> {
             handlers: HashMap::new(),
         })
     }
+    
+    pub fn handler(&mut self, dev: &DeviceId) -> Option<&mut H> {
+        self.handlers.get_mut(dev)
+    }
         
     pub fn attach(&mut self, mut handler: H) -> io::Result<DeviceId> {
         let handle = handler.device().handle();

@@ -92,7 +92,7 @@ impl Subscription {
         let must_trigger = self.retain.as_ref().map(|v| *v != val).unwrap_or(true);
         if must_trigger {
             let var = Var::Named(self.lvar.clone());
-            let event = Event::new(self.device, var, val);
+            let event = Event::new(self.device, "lvar", var, val);
             events.push(event);
         }
     }
