@@ -12,7 +12,7 @@ use std::ptr;
 use libc::malloc;
 
 use fv::*;
-use fsx::config;
+use config;
 use fsx::logging;
 
 const CONFIG_FILE: &'static str = "Modules/flightvars.conf";
@@ -37,7 +37,7 @@ impl Module {
     	logging::config_logging(settings.logging);
 
         info!("Starting FlightVars module v{}", FLIGHTVARS_VERSION);
-        self.flightvars = Some(FlightVars::new().unwrap());
+        self.flightvars = Some(FlightVars::new(&settings.oacsp_serial).unwrap());
         info!("FlightVars module started successfully");
     }
     pub fn stop(self) {

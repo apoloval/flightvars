@@ -13,7 +13,7 @@ use log4rs::init_config;
 use log4rs::appender::FileAppender;
 use log4rs::config::{Appender, Config, Root};
 
-use fsx::config::LoggingSettings;
+use config::LoggingSettings;
 
 pub fn config_logging(settings: LoggingSettings) {
     init_config(log_config(settings)).unwrap()

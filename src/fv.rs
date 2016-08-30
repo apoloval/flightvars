@@ -12,6 +12,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+use config::*;
 use domain;
 use domain::DomainDispatcher;
 use io::*;
@@ -28,7 +29,7 @@ unsafe impl Send for FlightVars {}
 
 impl FlightVars {
     
-    pub fn new() -> io::Result<FlightVarsHandler> {
+    pub fn new(settings: &OacspSerialSettings) -> io::Result<FlightVarsHandler> {
         let domains = try!(DomainDispatcher::new());
         let iocp = try!(CompletionPort::new());
         let (tx, rx) = mpsc::channel();
@@ -38,6 +39,7 @@ impl FlightVars {
             iocp: iocp,
             stop: false,
         };
+        fv.open_serial_ports(settings);
         let join_handle = thread::spawn(move || fv.run());
         let handler = FlightVarsHandler {
             join_handle: join_handle,
@@ -45,6 +47,10 @@ impl FlightVars {
         };
         Ok(handler)
     }
+    
+    fn open_serial_ports(&mut self, settings: &OacspSerialSettings) {
+        
+    } 
     
     fn run(&mut self) {
         self.stop = false;
@@ -110,4 +116,3 @@ impl FlightVarsHandler {
         self.join_handle.join().unwrap();
     }
 }
-

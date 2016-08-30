@@ -18,6 +18,7 @@ extern crate tempdir;
 extern crate toml;
 extern crate ws2_32;
 
+mod config;
 mod domain;
 mod fsx;
 mod fv;
