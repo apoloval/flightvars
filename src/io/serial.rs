@@ -14,6 +14,7 @@ use std::os::windows::ffi::OsStrExt;
 use super::device::*;
 use super::ffi::*;
 
+#[allow(dead_code)]
 pub enum SerialTimeouts {
     /// Read any byte upon available in input buffers
     ReadUponAvailable,

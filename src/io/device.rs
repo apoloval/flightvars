@@ -10,6 +10,7 @@ use std::boxed::Box;
 use std::cmp;
 use std::io;
 use std::io::Write;
+use std::ops::DerefMut;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
@@ -53,7 +54,8 @@ impl Device {
     }
     
     pub fn handle(&self) -> HANDLE { self.handle }
-    
+
+	#[allow(dead_code)]    
     pub fn open(path: &Path) -> io::Result<Device> {
         let encoded_path: Vec<u16> = path
         	.as_os_str()
@@ -189,13 +191,12 @@ pub trait DeviceHandler {
     fn process_event(&mut self, event: Event) -> io::Result<()>;    
 }
 
-#[allow(unconditional_recursion)]
 impl<H: DeviceHandler + ?Sized> DeviceHandler for Box<H> {
     fn device(&mut self) -> &mut Device {
-        (*self).device()
+        self.deref_mut().device()
     }   
      
     fn process_event(&mut self, event: Event) -> io::Result<()> {
-        (*self).process_event(event)
+        self.deref_mut().process_event(event)
     }    
 }

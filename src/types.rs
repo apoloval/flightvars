@@ -21,6 +21,7 @@ pub type DeviceId = u32;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Offset(pub u16, pub u8);
 
+#[allow(dead_code)]
 impl Offset {
     pub fn from(addr: u16, size: u8) -> Option<Offset> {
         match size {
@@ -67,6 +68,7 @@ pub enum Var {
     Offset(Offset),
 }
 
+#[allow(dead_code)]
 impl Var {
     pub fn named(n: &str) -> Var { Var::Named(n.to_string()) }
     

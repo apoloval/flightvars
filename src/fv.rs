@@ -52,16 +52,26 @@ impl FlightVars {
     fn open_serial_ports(&mut self, settings: &OacspSerialSettings) {
         // TODO: break coupleness among serial ports, OACSP and fixed baud-rate
         for port in &settings.ports {
-            if let Err(e) = self.open_serial_port(port) {
-                error!("cannot configure serial port {:?}: {:?}", port, e);
+            match self.open_serial_port(port) {
+                Ok(_) => {
+                    info!("serial port {:?} successfully configured", port);
+                }
+                Err(e) => {
+                    error!("cannot configure serial port {:?}: {:?}", port, e);
+                }
             }
         }
     }
     
     fn open_serial_port(&mut self, port: &OsStr) -> io::Result<()> {
-        let mut port = try!(Serial::open_arduino(port.to_str().unwrap(), 9600));
-        try!(port.set_timeouts(&SerialTimeouts::ReadUponAvailable));
-        let proto = Oacsp::new(port.as_device(), self.domains.clone());
+        let baudrate = 9600;
+        debug!("opening serial port {:?} at {} bauds", port, baudrate);
+        let mut serial = try!(Serial::open_arduino(port.to_str().unwrap(), baudrate));
+        debug!("setting read-upon-available timeouts for serial port {:?}", port);
+        try!(serial.set_timeouts(&SerialTimeouts::ReadUponAvailable));
+        debug!("initializing OACSP protocol for serial port {:?}", port);
+        let proto = Oacsp::new(serial.as_device(), self.domains.clone());
+        debug!("attaching serial port {:?} to IOCP port", port);
 		try!(self.iocp.attach(Box::new(proto)));
 		Ok(())
     } 

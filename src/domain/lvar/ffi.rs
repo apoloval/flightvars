@@ -8,8 +8,6 @@
 
 //! This module provides low level functions to access panel information in FSX/Prepar3D. 
 
-use std::ffi::CString;
-
 use libc::c_char;
 
 pub type Id = i32;
