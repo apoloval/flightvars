@@ -16,3 +16,4 @@ mod serial;
 
 pub use self::device::*;
 pub use self::iocp::*;
+pub use self::serial::*;

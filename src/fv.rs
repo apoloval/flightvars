@@ -7,6 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::boxed::Box;
+use std::ffi::OsStr;
 use std::io;
 use std::sync::mpsc;
 use std::thread;
@@ -49,7 +50,20 @@ impl FlightVars {
     }
     
     fn open_serial_ports(&mut self, settings: &OacspSerialSettings) {
-        
+        // TODO: break coupleness among serial ports, OACSP and fixed baud-rate
+        for port in &settings.ports {
+            if let Err(e) = self.open_serial_port(port) {
+                error!("cannot configure serial port {:?}: {:?}", port, e);
+            }
+        }
+    }
+    
+    fn open_serial_port(&mut self, port: &OsStr) -> io::Result<()> {
+        let mut port = try!(Serial::open_arduino(port.to_str().unwrap(), 9600));
+        try!(port.set_timeouts(&SerialTimeouts::ReadUponAvailable));
+        let proto = Oacsp::new(port.as_device(), self.domains.clone());
+		try!(self.iocp.attach(Box::new(proto)));
+		Ok(())
     } 
     
     fn run(&mut self) {

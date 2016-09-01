@@ -10,6 +10,8 @@ use std::io;
 
 mod oacsp;
 
+pub use self::oacsp::Oacsp;
+
 use io::DeviceHandler;
 use types::{Value, Var};
 
