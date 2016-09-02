@@ -6,6 +6,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::collections::VecDeque;
+use std::fmt::Display;
 use std::io;
 
 use byteorder::{BigEndian, ReadBytesExt};
@@ -19,6 +21,7 @@ use types::*;
 pub struct Fsuipc {
     handle: LocalHandle,
     subscriptions: Vec<Subscription>,
+    writes: VecDeque<WriteOp>,
 }
 
 impl Fsuipc {
@@ -26,10 +29,54 @@ impl Fsuipc {
         Ok(Fsuipc {
             handle: try!(LocalHandle::new()),
             subscriptions: Vec::new(),
+            writes: VecDeque::with_capacity(1024),
         })
     }
     
-    fn write_of<T>(&mut self, offset: u16, value: T) -> io::Result<()> {
+    fn poll_writes(&mut self) -> io::Result<()> {
+        loop {
+            match self.writes.pop_front() {
+                Some(op) => {
+                    match self.poll_write(&op) {
+                        Err(ref e) if e.kind() == io::ErrorKind::TimedOut => {
+                            warn!("FSUIPC is not responding to write operations at this moment");
+                            debug!("write operation {:?} is queued again to be processed later", 
+                                op);
+                            self.writes.push_front(op);
+                            return Ok(());
+                        }
+                        Err(other) => return Err(other),
+                        _ => {} 
+                    }                    
+                }
+                None => return Ok(()),
+            }
+        }
+    }
+    
+    fn poll_write(&mut self, write: &WriteOp) -> io::Result<()> {
+        match *write {
+            WriteOp::Byte(addr, byte) => self.write_of(addr, byte),
+            WriteOp::Word(addr, word) => self.write_of(addr, word),
+            WriteOp::DWord(addr, dword) => self.write_of(addr, dword),
+        }
+    }
+    
+    fn poll_subscriptions(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
+        events.clear();
+        let mut session = self.handle.session();
+        for sub in self.subscriptions.iter_mut() {
+            try!(sub.append_read(&mut session));
+        }
+        try!(session.process());
+        for sub in self.subscriptions.iter_mut() {
+            sub.trigger_event(events);
+        }
+        Ok(())
+    }
+
+    fn write_of<T: Display>(&mut self, offset: u16, value: T) -> io::Result<()> {
+        debug!("processing a write request for offset 0x{:x} <- {}", offset, value);
         let mut session = self.handle.session();
         try!(session.write(u16::from(offset), &value));
         try!(session.process());
@@ -39,12 +86,17 @@ impl Fsuipc {
 
 impl Domain for Fsuipc {
     fn write(&mut self, variable: &Var, value: &Value) -> io::Result<()> {
+        debug!("queueing write operation for {:?} <- {}", variable, value);
         match variable {
-            &Var::Offset(Offset(addr, 1)) => self.write_of::<u8>(addr, u8::from(value)),
-            &Var::Offset(Offset(addr, 2)) => self.write_of::<u16>(addr, u16::from(value)),
-            &Var::Offset(Offset(addr, 4)) => self.write_of::<u32>(addr, u32::from(value)),
+            &Var::Offset(Offset(addr, 1)) => 
+            	self.writes.push_back(WriteOp::Byte(addr, u8::from(value))), 
+            &Var::Offset(Offset(addr, 2)) => 
+            	self.writes.push_back(WriteOp::Word(addr, u16::from(value))),
+            &Var::Offset(Offset(addr, 4)) => 
+            	self.writes.push_back(WriteOp::DWord(addr, u32::from(value))),
             _ => unreachable!(),
         }
+        Ok(())
     }
     
     fn subscribe(&mut self, device: DeviceId, variable: &Var) -> io::Result<()> {
@@ -74,17 +126,10 @@ impl Domain for Fsuipc {
     }
     
     fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
-        events.clear();
-        let mut session = self.handle.session();
-        for sub in self.subscriptions.iter_mut() {
-            try!(sub.append_read(&mut session));
-        }
-        try!(session.process());
-        for sub in self.subscriptions.iter_mut() {
-            sub.trigger_event(events);
-        }
+        try!(self.poll_writes());
+        try!(self.poll_subscriptions(events));
         Ok(())
-    }
+    }    
 }
 
 struct Subscription {
@@ -117,4 +162,11 @@ impl Subscription {
             events.push(event);
         }
     }
+}
+
+#[derive(Debug)]
+enum WriteOp {
+    Byte(u16, u8),
+    Word(u16, u16),
+    DWord(u16, u32),
 }
