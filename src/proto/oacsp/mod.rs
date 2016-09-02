@@ -42,7 +42,7 @@ impl Oacsp {
         let dev_id = self.dev.id();
         let mut buf = io::BufReader::new(self.dev.recv_bytes());
         let mut line = String::new();
-        let nbytes = try!(buf.read_line(&mut line)) + 1; // end-of-line byte counts
+        let nbytes = try!(buf.read_line(&mut line));
         let begin_received = self.client_id.is_some();
         match (try!(RawInputMessage::from_str(&line)), begin_received) {
             (RawInputMessage::Begin { version: _, client_id }, false) => {
