@@ -73,7 +73,7 @@ impl Device {
           		FILE_FLAG_OVERLAPPED,
           		0 as HANDLE)
         };
-        Ok(Device::new(&format!("file:{:?}", path), handle))
+        Ok(Device::new(&format!("file://{:?}", path), handle))
     }
     
     pub fn new(name: &str, handle: HANDLE) -> Device {

@@ -55,7 +55,7 @@ impl Serial {
         };
 
         Ok(Serial {
-            dev: Device::new(&format!("serial:{}", port), handle)
+            dev: Device::new(&format!("serial://{}", port), handle)
         })
     }
     
