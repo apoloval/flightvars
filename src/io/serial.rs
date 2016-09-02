@@ -10,6 +10,8 @@ use std::ffi::OsStr;
 use std::io;
 use std::ops::{Deref, DerefMut};
 use std::os::windows::ffi::OsStrExt;
+use std::thread;
+use std::time::Duration;
 
 use super::device::*;
 use super::ffi::*;
@@ -70,6 +72,9 @@ impl Serial {
 		dcb.Parity = 0;
 		dcb.setDtrControl();
 		try!(port.set_dcb(&dcb));
+		
+		// Now wait an instant while the board resets to avoid buffer writes before purge
+		thread::sleep(Duration::from_millis(10));
 		
 		// Purge the buffers to eliminate accumulated messages prior to reset
         checked_result!(PurgeComm(port.handle(), PURGE_TXCLEAR | PURGE_RXCLEAR));
