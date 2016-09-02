@@ -100,6 +100,7 @@ impl Domain for Fsuipc {
     }
     
     fn subscribe(&mut self, device: DeviceId, variable: &Var) -> io::Result<()> {
+        info!("receiving a subscription from device {} for {:?}", device, variable);
         match variable {
             &Var::Offset(ref offset) => {
                 let subscription = Subscription {
@@ -121,6 +122,7 @@ impl Domain for Fsuipc {
     }
     
     fn unsubscribe_all(&mut self, device: DeviceId) -> io::Result<()> {
+        debug!("removing all subscriptions for device ID {}", device);
         self.subscriptions.retain(|s| s.device != device);
         Ok(())
     }

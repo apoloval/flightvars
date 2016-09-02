@@ -28,6 +28,7 @@ impl LVar {
 
 impl Domain for LVar {
     fn write(&mut self, variable: &Var, value: &Value) -> io::Result<()> {
+        debug!("processing a write operation for {:?} <- {}", variable, value);
         match variable {
             &Var::Named(ref lvar) => {
                 let id = try!(check_named_variable(lvar).ok_or(io::Error::new(
@@ -46,6 +47,7 @@ impl Domain for LVar {
     }
     
     fn subscribe(&mut self, device: DeviceId, variable: &Var) -> io::Result<()> {
+        info!("receiving a subscription from device {} for {:?}", device, variable);
         match variable {
             &Var::Named(ref lvar) => {
                 let subs = Subscription {
@@ -66,6 +68,7 @@ impl Domain for LVar {
     }
     
     fn unsubscribe_all(&mut self, device: DeviceId) -> io::Result<()> {
+        debug!("removing all subscriptions for device ID {}", device);
         self.subscriptions.retain(|s| s.device != device);
         Ok(())
     }

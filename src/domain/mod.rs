@@ -16,6 +16,7 @@ use types::*;
 pub mod fsuipc;
 pub mod lvar;
 
+#[derive(Debug)]
 pub struct Event {
     pub device: DeviceId,
     pub domain: String,

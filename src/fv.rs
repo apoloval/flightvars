@@ -83,6 +83,7 @@ impl FlightVars {
             self.process_domain_events();
             self.process_commands();
         }
+        info!("FlightVars is terminating by request of the simulator");
     }
     
     fn process_commands(&mut self) {
@@ -115,6 +116,7 @@ impl FlightVars {
     }
     
     fn send_domain_event(&mut self, ev: domain::Event) {
+        debug!("processing event {:?}", ev);
         match self.iocp.handler(&ev.device) {
             Some(handler) => {
                 if let Err(e) = handler.send_update(&ev.domain, ev.variable, ev.value) {
