@@ -90,7 +90,13 @@ struct Subscription {
 
 impl Subscription {
     fn trigger_event(&mut self, events: &mut Vec<Event>) {
-        let id = check_named_variable(&self.lvar).unwrap();
+        let id = match check_named_variable(&self.lvar) {
+            Some(id) => id,
+            None => {
+                error!("cannot obtain LVAR ID for variable {}", self.lvar);
+                return;
+            } 
+        };
         let val = Value::Number(get_named_variable_value(id) as isize);
         let must_trigger = self.retain.as_ref().map(|v| *v != val).unwrap_or(true);
         if must_trigger {
