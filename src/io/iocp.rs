@@ -81,8 +81,10 @@ impl<H: DeviceHandler> CompletionPort<H> {
             let handler = self.handlers.get_mut(&id).unwrap();
             if let Some(event) = handler.device().process_event() {
             	if let Err(e) = handler.process_event(event) {
-            	    error!("unexpected error while processing IO event: {:?}", e);
-            	    info!("closing connection to handle {} due to IO errors", id);
+            	    error!("unexpected error while processing IO event from device {}: {:?}", 
+            	        handler.device().name(), e);
+            	    info!("closing connection to device {} due to IO errors", 
+            	        handler.device().name());
             	    try!(handler.device().close());
             	}        
             }
