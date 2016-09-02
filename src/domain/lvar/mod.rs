@@ -103,6 +103,7 @@ impl Subscription {
             let var = Var::Named(self.lvar.clone());
             let event = Event::new(self.device, "lvar", var, val);
             events.push(event);
+            self.retain = Some(val);
         }
     }
 }
