@@ -41,6 +41,7 @@ impl DeviceControlBlock {
 }
 
 pub struct Device {
+    name: String,
     handle: HANDLE,
     read_control_block: DeviceControlBlock,
     read_pending: bool,
@@ -49,9 +50,9 @@ pub struct Device {
 
 impl Device {
     
-    pub fn id(&self) -> DeviceId {
-        self.handle as DeviceId
-    }
+    pub fn name(&self) -> &str { &self.name }
+    
+    pub fn id(&self) -> DeviceId { self.handle as DeviceId }
     
     pub fn handle(&self) -> HANDLE { self.handle }
 
@@ -72,11 +73,12 @@ impl Device {
           		FILE_FLAG_OVERLAPPED,
           		0 as HANDLE)
         };
-        Ok(Device::from_handle(handle))
+        Ok(Device::new(&format!("file:{:?}", path), handle))
     }
     
-    pub fn from_handle(handle: HANDLE) -> Device {
+    pub fn new(name: &str, handle: HANDLE) -> Device {
       Device {
+          name: name.to_string(),
           handle: handle,
           read_control_block: DeviceControlBlock::new(),
           read_pending: false,
