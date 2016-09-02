@@ -109,7 +109,7 @@ impl DeviceHandler for Oacsp {
         match event {
             Event::Ready => self.dev.request_read(),
             Event::BytesRead(_) => {
-                if self.line_is_ready() {
+                while self.line_is_ready() {
                     let nread = try!(self.process_input());
                     self.dev.consume_recv_buffer(nread);
                 }
