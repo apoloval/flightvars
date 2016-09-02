@@ -74,7 +74,6 @@ impl Domain for LVar {
     }
     
     fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
-        events.clear();
         for sub in self.subscriptions.iter_mut() {
             sub.trigger_event(events);
         }

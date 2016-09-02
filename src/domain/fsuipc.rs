@@ -63,7 +63,6 @@ impl Fsuipc {
     }
     
     fn poll_subscriptions(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
-        events.clear();
         let mut session = self.handle.session();
         for sub in self.subscriptions.iter_mut() {
             try!(sub.append_read(&mut session));
