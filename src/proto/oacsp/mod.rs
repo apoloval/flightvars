@@ -46,6 +46,7 @@ impl Oacsp {
         let begin_received = self.client_id.is_some();
         match (try!(RawInputMessage::from_str(&line)), begin_received) {
             (RawInputMessage::Begin { version: _, client_id }, false) => {
+                info!("received a begin message from client {}", client_id);
             	self.client_id = Some(client_id);
             	Ok(nbytes)
             },
@@ -53,24 +54,32 @@ impl Oacsp {
 				Err(io::Error::new(io::ErrorKind::InvalidData, "begin message already received"))                    
             }
             (RawInputMessage::WriteLvar { lvar, value }, true) => {
+                debug!("received a WRITE_LVAR message from client {}: {} <- {}", 
+                    self.client_id_str(), lvar, value);
                 try!(self.domains.with_domain("lvar", |dom| {
 					dom.write(&Var::Named(lvar), &value)                        
                 }));
                 Ok(nbytes)
             }
             (RawInputMessage::WriteOffset { offset, value }, true) => {
+                debug!("received a WRITE_OFFSET message from client {}: {} <- {}", 
+                    self.client_id_str(), offset, value);
                 try!(self.domains.with_domain("fsuipc", |dom| {
 					dom.write(&Var::Offset(offset), &value)                        
                 }));
                 Ok(nbytes)
             }
             (RawInputMessage::ObserveLvar { lvar }, true) => {
+                debug!("received a OBSERVE_LVAR message from client {}: {}", 
+                    self.client_id_str(), lvar);
                 try!(self.domains.with_domain("lvar", |dom| {
 					dom.subscribe(dev_id, &Var::Named(lvar))                        
                 }));
                 Ok(nbytes)
             }
             (RawInputMessage::ObserveOffset { offset }, true) => {
+                debug!("received a OBSERVE_OFFSET message from client {}: {}", 
+                    self.client_id_str(), offset);
                 try!(self.domains.with_domain("fsuipc", |dom| {
 					dom.subscribe(dev_id, &Var::Offset(offset))                        
                 }));
@@ -83,6 +92,13 @@ impl Oacsp {
 				Err(error)                    
             }
         }                
+    }
+    
+    fn client_id_str(&self) -> &str {
+        self.client_id
+        	.as_ref()
+        	.map(|id| id.as_str())
+        	.unwrap_or("none")
     }
 }
 

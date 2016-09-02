@@ -96,6 +96,10 @@ impl FlightVars {
     
     fn process_io_event(&mut self) {
         match self.iocp.process_event(&Duration::from_millis(50)) {
+            Err(ref e) if self.iocp.is_timeout_error(e) => {},
+            Err(e) => {
+                error!("unexpected error ocurred while processing IO event: {:?}", e);
+            }
             _ => {},
         }
     }

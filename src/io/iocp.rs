@@ -80,7 +80,9 @@ impl<H: DeviceHandler> CompletionPort<H> {
         let was_closed = {
             let handler = self.handlers.get_mut(&id).unwrap();
             if let Some(event) = handler.device().process_event() {
-            	if let Err(_) = handler.process_event(event) {
+            	if let Err(e) = handler.process_event(event) {
+            	    error!("unexpected error while processing IO event: {:?}", e);
+            	    info!("closing connection to handle {} due to IO errors", id);
             	    try!(handler.device().close());
             	}        
             }
@@ -90,6 +92,10 @@ impl<H: DeviceHandler> CompletionPort<H> {
             self.handlers.remove(&id);
         }
         Ok(id)
+    }
+    
+    pub fn is_timeout_error(&self, error: &io::Error) -> bool {
+        error.raw_os_error() == Some(258)
     }
 }
 
