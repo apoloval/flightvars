@@ -21,6 +21,8 @@ mod output;
 use self::input::RawInputMessage;
 use self::output::RawOutputMessage;
 
+const PROTOCOL_VERSION: u16 = 2;
+
 pub struct Oacsp {
     dev: Device,
     domains: DomainDispatcher,
@@ -45,7 +47,14 @@ impl Oacsp {
         let nbytes = try!(buf.read_line(&mut line));
         let begin_received = self.client_id.is_some();
         match (try!(RawInputMessage::from_str(&line)), begin_received) {
-            (RawInputMessage::Begin { version: _, client_id }, false) => {
+            (RawInputMessage::Begin { version, client_id }, false) => {
+                if version != PROTOCOL_VERSION {
+                    let error = io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("OACSP version {} is not supported by this version of FlightVars",
+                        	version));
+                    return Err(error);
+                }
                 info!("received a begin message from client {}", client_id);
             	self.client_id = Some(client_id);
             	Ok(nbytes)
