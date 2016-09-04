@@ -158,7 +158,7 @@ mod test {
 	    let mut iocp = CompletionPort::new().unwrap();	    
 		let mut port = Serial::open_arduino("COM3", 9600).unwrap();
 		port.set_timeouts(&SerialTimeouts::WaitToFill).unwrap();
-		iocp.attach(EchoHandler::new(port.as_device())).unwrap();
+		iocp.attach(EchoHandler::new(Device::from(port))).unwrap();
 		
 		// Wait for Arduino to completely boot
 		thread::sleep(time::Duration::from_millis(2000));
