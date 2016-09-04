@@ -16,6 +16,7 @@ install:
   - md C:\Windows\Temp\nsis-xml
   - 7z x -oC:\Windows\Temp\nsis-xml C:\Windows\Temp\nsis-xml.zip
   - copy "C:\Windows\Temp\nsis-xml\Plugin\xml.dll" "C:\Program Files (x86)\NSIS\Plugins\x86-ansi"
+  - copy "C:\Windows\Temp\nsis-xml\Include\XML.nsh" "C:\Program Files (x86)\NSIS\Include"
 
 test_script:
   - cargo test --verbose
