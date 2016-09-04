@@ -13,16 +13,16 @@ extern crate libc;
 #[macro_use] extern crate log;
 extern crate log4rs;
 extern crate rustc_serialize;
-extern crate serial;
+extern crate tempdir;    
 extern crate toml;
-extern crate ws2_32;
 
+mod config;
 mod domain;
-#[cfg(windows)] mod fsx;
-mod comm;
-mod port;
+mod fsx;
+mod fv;
+mod io;
 mod proto;
-mod util;
+mod types;
 
 #[cfg(windows)]
 #[export_name="\x01_DLLStart"]
@@ -37,4 +37,4 @@ pub extern "stdcall" fn dll_stop() {
 }
 
 // Making this public we ensure this symbol is exported in the DLL
-pub use domain::lvar::Panels;
+pub use domain::lvar::ffi::Panels;

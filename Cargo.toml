@@ -4,16 +4,15 @@ version = "0.1.0"
 authors = ["Alvaro Polo <apoloval@gmail.com>"]
 
 [dependencies]
-byteorder = "0.4"
+byteorder = "0.5"
 fsuipc = "0.3"
 hex = "0.1"
 libc = "*"
 log = "0.3"
 log4rs = "0.3"
 rustc-serialize = "0.3"
-serial = { git = "https://github.com/apoloval/serial-rs.git", branch="try_clone" }
+tempdir = "0.3.5"
 toml = "0.1"
-ws2_32-sys = "0.2"
 
 [lib]
 crate-type = ["dylib"]

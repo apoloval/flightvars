@@ -8,26 +8,14 @@
 
 use std::io;
 
-use domain::{Client, Command, Event};
+mod oacsp;
 
-pub mod oacsp;
+pub use self::oacsp::Oacsp;
 
-pub trait CommandRead {
-    fn read_cmd(&mut self) -> io::Result<Command>;
+use io::DeviceHandler;
+use types::{Value, Var};
+
+pub trait Protocol : DeviceHandler {
+
+	fn send_update(&mut self, domain: &str, variable: Var, value: Value) -> io::Result<()>;    
 }
-
-
-pub trait EventWrite {
-    fn write_ev(&mut self, msg: &Event) -> io::Result<()>;
-}
-
-
-pub trait Protocol<I, O> {
-    type Read: CommandRead;
-    type Write: EventWrite;
-    fn name(&self) -> &str;
-    fn reader(&self, input: I, id: Client) -> Self::Read;
-    fn writer(&self, output: O) -> Self::Write;
-}
-
-pub fn oacsp() -> oacsp::Oacsp { oacsp::Oacsp }

@@ -7,79 +7,56 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::fmt;
-use std::io;
 
-use domain::types::*;
-use domain::fsuipc::types::*;
-use util::Consume;
+use types::*;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum OutputMessage {
+pub enum RawOutputMessage {
     EventLvar { lvar: String, value: Value },
-    EventOffset { offset: OffsetAddr, value: Value }
+    EventOffset { offset: Offset, value: Value }
 }
 
-impl OutputMessage {
+impl RawOutputMessage {
 	#[cfg(test)]
-    pub fn event_lvar(lvar: &str, value: Value) -> OutputMessage {
-        OutputMessage::EventLvar { lvar: lvar.to_string(), value: value }
+    pub fn event_lvar(lvar: &str, value: Value) -> RawOutputMessage {
+        RawOutputMessage::EventLvar { lvar: lvar.to_string(), value: value }
     }
 
 	#[cfg(test)]
-    pub fn event_offset(offset: OffsetAddr, value: Value) -> OutputMessage {
-        OutputMessage::EventOffset { offset: offset, value: value }
+    pub fn event_offset(offset: Offset, value: Value) -> RawOutputMessage {
+        RawOutputMessage::EventOffset { offset: offset, value: value }
     }
 }
 
-impl fmt::Display for OutputMessage {
+impl fmt::Display for RawOutputMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            &OutputMessage::EventLvar { ref lvar, value } =>
+            &RawOutputMessage::EventLvar { ref lvar, value } =>
                 write!(f, "EVENT_LVAR {} {}", lvar, value),
-            &OutputMessage::EventOffset { ref offset, value } =>
+            &RawOutputMessage::EventOffset { ref offset, value } =>
                 write!(f, "EVENT_OFFSET {} {}", offset, value),
         }
-    }
-}
-
-
-pub struct MessageConsumer<W: io::Write> {
-    output: W
-}
-
-impl<W: io::Write> MessageConsumer<W> {
-    pub fn new(output: W) -> MessageConsumer<W> {
-        MessageConsumer { output: output }
-    }
-}
-
-impl<W: io::Write> Consume for MessageConsumer<W> {
-    type Item = OutputMessage;
-    type Error = io::Error;
-    fn consume(&mut self, msg: OutputMessage) -> io::Result<()> {
-        writeln!(&mut self.output, "{}", msg)
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use domain::types::*;
-    use domain::fsuipc::types::*;
+    use types::*;
 
     use super::*;
 
     #[test]
     fn should_display_event_lvar_msg() {
-        let msg = OutputMessage::event_lvar("foobar", Value::Int(42));
+        let msg = RawOutputMessage::event_lvar("foobar", Value::Number(42));
         let buf = format!("{}", msg);
         assert_eq!(buf, "EVENT_LVAR foobar 42")
     }
 
     #[test]
     fn should_display_event_offset_msg() {
-        let msg = OutputMessage::event_offset(OffsetAddr::from(0x1234), Value::UnsignedInt(42));
+        let msg = RawOutputMessage::event_offset(Offset::from(0x1234, 2).unwrap(), Value::Number(42));
         let buf = format!("{}", msg);
-        assert_eq!(buf, "EVENT_OFFSET 1234 42")
+        assert_eq!(buf, "EVENT_OFFSET 1234+2 42")
     }
 }

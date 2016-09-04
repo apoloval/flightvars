@@ -7,35 +7,145 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::io;
+use std::io::{BufRead, Write};
+use std::str::FromStr;
 
-use domain::Client;
+use domain::DomainDispatcher;
+use io::*;
 use proto::*;
+use types::*;
 
 mod input;
 mod output;
-mod reader;
-mod writer;
 
-use self::input::*;
-use self::output::*;
-pub use self::reader::*;
-pub use self::writer::*;
+use self::input::RawInputMessage;
+use self::output::RawOutputMessage;
 
+const PROTOCOL_VERSION: u16 = 2;
 
-#[derive(Clone)]
-pub struct Oacsp;
+pub struct Oacsp {
+    dev: Device,
+    domains: DomainDispatcher,
+    client_id: Option<String>
+}
 
-impl<R: io::Read, W: io::Write> Protocol<R, W> for Oacsp {
-    type Read = CommandReader<MessageIter<R>>;
-    type Write = EventWriter<MessageConsumer<W>>;
+impl Oacsp {
     
-    fn name(&self) -> &str { "oacsp" }
-
-    fn reader(&self, input: R, id: Client) -> CommandReader<MessageIter<R>> {
-        CommandReader::new(MessageIter::new(input), id)
+    pub fn new(dev: Device, domains: DomainDispatcher) -> Oacsp {
+        Oacsp { dev: dev, domains: domains, client_id: None }
+    }
+    
+    fn line_is_ready(&self) -> bool {
+        self.dev.recv_bytes().contains(&b'\n')
     }
 
-    fn writer(&self, output: W) -> EventWriter<MessageConsumer<W>> {
-        EventWriter::new(MessageConsumer::new(output))
+    fn process_input(&mut self) -> io::Result<usize> {
+        assert!(self.line_is_ready());
+        let dev_id = self.dev.id();
+        let mut buf = io::BufReader::new(self.dev.recv_bytes());
+        let mut line = String::new();
+        let nbytes = try!(buf.read_line(&mut line));
+        let begin_received = self.client_id.is_some();
+        match (try!(RawInputMessage::from_str(&line)), begin_received) {
+            (RawInputMessage::Begin { version, client_id }, false) => {
+                if version != PROTOCOL_VERSION {
+                    let error = io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("OACSP version {} is not supported by this version of FlightVars",
+                        	version));
+                    return Err(error);
+                }
+                info!("received a begin message from client {}", client_id);
+            	self.client_id = Some(client_id);
+            	Ok(nbytes)
+            },
+            (RawInputMessage::Begin { version: _, client_id: _ }, true) => {
+				Err(io::Error::new(io::ErrorKind::InvalidData, "begin message already received"))                    
+            }
+            (RawInputMessage::WriteLvar { lvar, value }, true) => {
+                debug!("received a WRITE_LVAR message from client {}: {} <- {}", 
+                    self.client_id_str(), lvar, value);
+                try!(self.domains.with_domain("lvar", |dom| {
+					dom.write(&Var::Named(lvar), &value)                        
+                }));
+                Ok(nbytes)
+            }
+            (RawInputMessage::WriteOffset { offset, value }, true) => {
+                debug!("received a WRITE_OFFSET message from client {}: {} <- {}", 
+                    self.client_id_str(), offset, value);
+                try!(self.domains.with_domain("fsuipc", |dom| {
+					dom.write(&Var::Offset(offset), &value)                        
+                }));
+                Ok(nbytes)
+            }
+            (RawInputMessage::ObserveLvar { lvar }, true) => {
+                debug!("received a OBSERVE_LVAR message from client {}: {}", 
+                    self.client_id_str(), lvar);
+                try!(self.domains.with_domain("lvar", |dom| {
+					dom.subscribe(dev_id, &Var::Named(lvar))                        
+                }));
+                Ok(nbytes)
+            }
+            (RawInputMessage::ObserveOffset { offset }, true) => {
+                debug!("received a OBSERVE_OFFSET message from client {}: {}", 
+                    self.client_id_str(), offset);
+                try!(self.domains.with_domain("fsuipc", |dom| {
+					dom.subscribe(dev_id, &Var::Offset(offset))                        
+                }));
+                Ok(nbytes)
+            }
+            (_, false) =>  {
+                let error = io::Error::new(
+                    io::ErrorKind::InvalidData, 
+                    "unexpected message while waiting for begin");
+				Err(error)                    
+            }
+        }                
     }
+    
+    fn client_id_str(&self) -> &str {
+        self.client_id
+        	.as_ref()
+        	.map(|id| id.as_str())
+        	.unwrap_or("none")
+    }
+}
+
+impl DeviceHandler for Oacsp {
+    fn device(&mut self) -> &mut Device { &mut self.dev }
+    
+    fn process_event(&mut self, event: Event) -> io::Result<()> {
+        match event {
+            Event::Ready => self.dev.request_read(),
+            Event::BytesRead(_) => {
+                while self.line_is_ready() {
+                    let nread = try!(self.process_input());
+                    self.dev.consume_recv_buffer(nread);
+                }
+                self.dev.request_read()
+            }
+            Event::BytesWritten(_) => Ok(()),
+        }
+    }    
+}
+
+impl Protocol for Oacsp {
+        
+    fn send_update(&mut self, domain: &str, variable: Var, value: Value) -> io::Result<()> {
+        let raw = try!(match variable {
+            Var::Offset(offset) if domain == "fsuipc" =>
+                Ok(RawOutputMessage::EventOffset { offset: offset, value: value }),
+            Var::Named(ref lvar) if domain == "lvar" =>
+                Ok(RawOutputMessage::EventLvar { lvar: lvar.clone(), value: value }),
+            _ => {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("cannot encode a message for domain '{}', var '{:?}'", 
+                        domain, variable)))
+            }
+        });        
+        let mut buf = Vec::new();
+        try!(write!(&mut buf, "{}\n", raw));
+        self.dev.request_write(&buf)
+    }    
 }
