@@ -97,9 +97,11 @@ impl Serial {
         checked_result!(SetCommState(self.dev.handle(), dcb as LPCDCB));
         Ok(())
     }
-    
-    pub fn as_device(self) -> Device {
-        self.dev
+}
+
+impl From<Serial> for Device {
+    fn from(serial: Serial) -> Device {
+        serial.dev
     }
 }
 

@@ -70,7 +70,7 @@ impl FlightVars {
         debug!("setting read-upon-available timeouts for serial port {:?}", port);
         try!(serial.set_timeouts(&SerialTimeouts::ReadUponAvailable));
         debug!("initializing OACSP protocol for serial port {:?}", port);
-        let proto = Oacsp::new(serial.as_device(), self.domains.clone());
+        let proto = Oacsp::new(Device::from(serial), self.domains.clone());
         debug!("attaching serial port {:?} to IOCP port", port);
 		try!(self.iocp.attach(Box::new(proto)));
 		Ok(())
