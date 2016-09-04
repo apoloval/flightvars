@@ -5,11 +5,11 @@ platform:
 
 install:
   # Installing Rust distribution
-  - choco install --yes --x86 --version=1.11 rust
-  - SET PATH=%PATH%;C:\Program Files (x86)\Rust stable GNU 1.11\bin
+  - choco install --yes --x86 --version=1.10 rust
+  - SET PATH=%PATH%;C:\Program Files (x86)\Rust stable GNU 1.10\bin
   - rustc -V
   - cargo -V
-  # Installing NSIS
+  # Installing NSIS (and XML plugin)
   - choco install --yes nsis
   - set PATH="C:\Program Files (x86)\NSIS";%PATH%
   - curl -fsS -o C:\Windows\Temp\nsis-xml.zip http://nsis.sourceforge.net/mediawiki/images/5/55/Xml.zip
