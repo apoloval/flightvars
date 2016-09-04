@@ -5,8 +5,8 @@ platform:
 
 install:
   # Installing Rust distribution
-  - choco install --yes --x86 --version=1.8 rust
-  - SET PATH=%PATH%;C:\Program Files (x86)\Rust stable GNU 1.8\bin
+  - choco install --yes --x86 --version=1.11 rust
+  - SET PATH=%PATH%;C:\Program Files (x86)\Rust stable GNU 1.11\bin
   - rustc -V
   - cargo -V
   # Installing InnoSetup
