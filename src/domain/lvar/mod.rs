@@ -8,6 +8,7 @@
 
 pub mod ffi;
 
+use std::collections::VecDeque;
 use std::ffi::CString;
 use std::io;
 
@@ -18,23 +19,55 @@ use self::ffi::*;
 
 pub struct LVar {
     subscriptions: Vec<Subscription>,
+    writes: VecDeque<WriteOp>,
 }
 
 impl LVar {
     pub fn new() -> LVar {
-        LVar { subscriptions: Vec::new() }
+        LVar { 
+            subscriptions: Vec::new(), 
+            writes: VecDeque::with_capacity(32) 
+        }
     }
+    
+    fn poll_writes(&mut self) {
+        let mut next_writes = VecDeque::with_capacity(32);
+        loop {
+            match self.writes.pop_front() {
+                Some(op) => {
+			        debug!("processing a write operation for {:?} <- {}", op.lvar, op.value);
+                    match check_named_variable(&op.lvar) {
+                        Some(id) => { set_named_variable_value(id, op.value); }
+                        None => {
+                            error!("there is no such lvar named {}", op.lvar);
+                            next_writes.push_back(op); 
+                        }
+                    }
+                }
+                None => break,
+            }
+        }
+        self.writes = next_writes;
+    }
+
+    fn poll_events(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
+        for sub in self.subscriptions.iter_mut() {
+            sub.trigger_event(events);
+        }
+        Ok(())
+    }    
 }
 
 impl Domain for LVar {
     fn write(&mut self, variable: &Var, value: &Value) -> io::Result<()> {
-        debug!("processing a write operation for {:?} <- {}", variable, value);
+        debug!("queueing write operation for {:?} <- {}", variable, value);
         match variable {
             &Var::Named(ref lvar) => {
-                let id = try!(check_named_variable(lvar).ok_or(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("there is no such named variable '{}'", lvar))));
-                set_named_variable_value(id, f64::from(value));
+                let op = WriteOp {
+                    lvar: lvar.clone(),
+                    value: f64::from(value)
+                };
+                self.writes.push_back(op);
                 Ok(())
             }
             _ => {
@@ -74,9 +107,8 @@ impl Domain for LVar {
     }
     
     fn poll(&mut self, events: &mut Vec<Event>) -> io::Result<()> {
-        for sub in self.subscriptions.iter_mut() {
-            sub.trigger_event(events);
-        }
+        self.poll_writes();
+        try!(self.poll_events(events));
         Ok(())
     }    
 }
@@ -107,10 +139,21 @@ impl Subscription {
     }
 }
 
+struct WriteOp {
+    lvar: String,
+    value: f64,
+}
+
 fn check_named_variable(name: &str) -> Option<Id> {
     unsafe {
         let func = (*Panels).check_named_variable;
-        let name = CString::new(name).unwrap();
+        let name = match CString::new(name) {
+            Ok(raw) => raw,
+            Err(e) => {
+                error!("cannot convert {} to a valid C-like string: {:?}", name, e);
+                return None;
+            }
+        };
         let id = (func)(name.as_ptr());
         if id != -1 { Some(id) } else { None }
     }
