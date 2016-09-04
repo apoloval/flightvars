@@ -152,15 +152,27 @@ impl Subscription {
     pub fn trigger_event(&mut self, events: &mut Vec<Event>) {
         let must_trigger = self.retain.as_ref().map(|v| *v != self.buffer).unwrap_or(true);
         if must_trigger {
-            let value = match self.offset.1 {
-                1 => Value::Number(self.buffer[0] as isize),
-                2 => Value::Number((&self.buffer[0..1]).read_i16::<BigEndian>().unwrap() as isize),
-                4 => Value::Number((&self.buffer[..]).read_i32::<BigEndian>().unwrap() as isize),
-                _ => unreachable!(),  
+            let decoded_value = match self.offset.1 {
+                1 => Ok(Value::Number(self.buffer[0] as isize)),
+                2 => (&self.buffer[0..2]).read_i16::<BigEndian>().map(|v| Value::Number(v as isize)), 
+                4 => (&self.buffer[..]).read_i32::<BigEndian>().map(|v| Value::Number(v as isize)), 
+                _ => {
+                    let error = io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("unexpected offset length in offset {:?}", self.offset));
+                    Err(error)
+                } 
             };
-            self.retain = Some(self.buffer);
-            let event = Event::new(self.device, "fsuipc", Var::Offset(self.offset), value);
-            events.push(event);
+            match decoded_value {
+                Ok(value) => {
+                    self.retain = Some(self.buffer);
+                    let event = Event::new(self.device, "fsuipc", Var::Offset(self.offset), value);
+                    events.push(event);
+                }
+                Err(e) => {
+                    error!("unexpected error while decoding event value: {:?}", e);
+                }
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Alvaro Polo <apoloval@gmail.com>"]
 
 [dependencies]
-byteorder = "0.4"
+byteorder = "0.5"
 fsuipc = "0.3"
 hex = "0.1"
 libc = "*"
