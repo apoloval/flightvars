@@ -17,8 +17,8 @@ FlightVars is aimed to solve a similar problem with a different approach.
 
 * **Performance**. Retrieving data by [polling][r1] is the past. FlightVars
 is powered by [MQTT][r2], a lightweight, binary protocol specifically designed
-for telemetric systems. Its [reactive programming][r3] model provides the best
-performance you may have.
+for telemetric systems. Its [reactive programming][r3] model joined to its 
+[asynchronous IO][r8] architecture provides the best performance you may have. 
 
 * **Interoperability**. Forget about limiting your addon to the platform and
 programming language you didn't choice. FlightVars is powered by [MQTT][r2],
@@ -45,16 +45,44 @@ And, of course, it's for free.
 
 ## Current limitations
 
-* FlightVars is still under development. It is not usable yet.
+What you read above is not fully true. These are the objectives of FlightVars. 
+It's roadmap. But the road is quite long, and many many lines of code have to be
+written until all told above is fully implemented. 
+
+The basic architecture of FlightVars is aligned with the objectives discussed
+in the previous section. It's written in a really fast and secure programming
+language (Rust). Under the hoods, a reactive model is used in combination with
+asynchronous IO to have the best performance. The architecture supports multiple
+universes of data (_aka_ domains). But do not expect awesome functionalities
+as MQTT support in the early versions. 
+
+Having said that. The current version of FlightVars is 0.1. This is what it 
+supports right now:
+
+* OACSP protocol v2 compatible with [OACSP library for Arduino][r7]. 
+* Serial port communication. 
+* Access to FSUIPC offsets.
+* Access to LVARs.
+
+The rest of features mentioned in the introduction section are still under
+development.
+
+## Installing
+
+FlightVars install process is pretty easy. You only have to download the
+[installation program][r6] and follow the instructions.
+
+Since FlightVars is open source software, you might want to build it from its
+sources. If so, please read the next section below. 
 
 ## Build instructions
 
 FlightVars is written in Rust programming language. If you want to build from
-sources you will need the [Rust package][r4] for Windows 32-bit installed in
+sources you will need the [Rust package][r4] for Windows GNU 32-bit installed in
 your system.
 
 Once installed, you can open a terminal with the appropriate settings with
-Windows Start menu -> All Programs -> Rust -> Rust 1.2 Shell. A command prompt
+Windows Start menu -> All Programs -> Rust -> Rust 1.X Shell. A command prompt
 will open. Go to the directory where FlightVars source code was downloaded
 and type:
 
@@ -73,3 +101,6 @@ configure the `DLL.xml` file to load the plugin on simulation startup (check out
 [r3]: http://en.wikipedia.org/wiki/Reactive_programming
 [r4]: https://www.rust-lang.org/install.html
 [r5]: http://support.precisionmanuals.com/kb/a92/dll_xml-information-and-troubleshooting.aspx
+[r6]: https://github.com/apoloval/flightvars/releases
+[r7]: http://openairbuscockpit.org/?page_id=184
+[r8]: http://en.wikipedia.org/wiki/Asynchronous_I/O
